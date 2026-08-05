@@ -48,18 +48,17 @@ try {
     respond(false, 'DB 연결 실패', [], 500);
 }
 
-// users 테이블 (kakao_id 기준, Phase 1에서 생성 예정): id, kakao_id, nickname, created_at
-$stmt = $pdo->prepare('SELECT id, kakao_id, nickname FROM users WHERE kakao_id = :kakao_id');
-$stmt->execute(['kakao_id' => $kakaoId]);
+$stmt = $pdo->prepare('SELECT user_id, kakao_user_id, nickname FROM users WHERE kakao_user_id = :kakao_user_id');
+$stmt->execute(['kakao_user_id' => $kakaoId]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if ($user) {
-    $pdo->prepare('UPDATE users SET nickname = :nickname WHERE id = :id')
-        ->execute(['nickname' => $nickname, 'id' => $user['id']]);
-    $userId = (int) $user['id'];
+    $pdo->prepare('UPDATE users SET nickname = :nickname, last_login_at = NOW() WHERE user_id = :user_id')
+        ->execute(['nickname' => $nickname, 'user_id' => $user['user_id']]);
+    $userId = (int) $user['user_id'];
 } else {
-    $pdo->prepare('INSERT INTO users (kakao_id, nickname) VALUES (:kakao_id, :nickname)')
-        ->execute(['kakao_id' => $kakaoId, 'nickname' => $nickname]);
+    $pdo->prepare('INSERT INTO users (kakao_user_id, nickname, last_login_at) VALUES (:kakao_user_id, :nickname, NOW())')
+        ->execute(['kakao_user_id' => $kakaoId, 'nickname' => $nickname]);
     $userId = (int) $pdo->lastInsertId();
 }
 
