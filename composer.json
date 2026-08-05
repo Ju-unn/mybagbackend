@@ -1,0 +1,6 @@
+{
+    "require": {
+        "firebase/php-jwt": "^7.1",
+        "guzzlehttp/guzzle": "^8.0"
+    }
+}

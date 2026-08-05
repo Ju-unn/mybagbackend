@@ -1,0 +1,4 @@
+/vendor/
+/config/.env
+/uploads/*
+!/uploads/.gitkeep
