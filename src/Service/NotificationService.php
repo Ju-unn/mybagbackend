@@ -1,0 +1,35 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Service;
+
+use App\Client\FcmApiClient;
+use App\Repository\NotificationRepository;
+
+// FCM 토큰 등록·발송 오케스트레이션. fcm-token.php / middleware/fcm_sender.php에서 이전
+class NotificationService
+{
+    public function __construct(
+        private FcmApiClient $fcmClient,
+        private NotificationRepository $notificationRepository,
+    ) {
+    }
+
+    public function registerFcmToken(int $userId, string $token, ?string $deviceId, string $platform, ?string $appVersion): void
+    {
+        $this->notificationRepository->upsertFcmToken($userId, $token, $deviceId, $platform, $appVersion);
+    }
+
+    // 발송 실패 시(UNREGISTERED/NOT_FOUND) 토큰을 비활성화. 반환값은 발송 성공 여부
+    public function notify(string $fcmToken, array $data): bool
+    {
+        $result = $this->fcmClient->send($fcmToken, $data);
+
+        if (!$result['success'] && $result['unregistered']) {
+            $this->notificationRepository->deactivateToken($fcmToken);
+        }
+
+        return $result['success'];
+    }
+}

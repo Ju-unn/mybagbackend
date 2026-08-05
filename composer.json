@@ -3,5 +3,10 @@
         "firebase/php-jwt": "^7.1",
         "guzzlehttp/guzzle": "^8.0",
         "google/auth": "^1.53"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
     }
 }

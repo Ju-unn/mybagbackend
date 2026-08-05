@@ -1,7 +1,7 @@
 <?php
 // DB 연결(PDO) 생성 함수
 
-require_once __DIR__ . '/env.php';
+require_once __DIR__ . '/environment.php';
 
 function get_db(): PDO
 {
