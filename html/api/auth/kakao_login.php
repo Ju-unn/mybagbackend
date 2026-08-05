@@ -37,6 +37,7 @@ try {
 $kakaoUser = json_decode((string) $kakaoRes->getBody(), true);
 $kakaoId = $kakaoUser['id'] ?? null;
 $nickname = $kakaoUser['kakao_account']['profile']['nickname'] ?? '사용자';
+$profileImageUrl = $kakaoUser['kakao_account']['profile']['profile_image_url'] ?? null;
 
 if (!$kakaoId) {
     respond(false, '카카오 사용자 정보를 확인할 수 없습니다.', [], 401);
@@ -53,12 +54,12 @@ $stmt->execute(['kakao_user_id' => $kakaoId]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if ($user) {
-    $pdo->prepare('UPDATE users SET nickname = :nickname, last_login_at = NOW() WHERE user_id = :user_id')
-        ->execute(['nickname' => $nickname, 'user_id' => $user['user_id']]);
+    $pdo->prepare('UPDATE users SET nickname = :nickname, profile_image_url = :profile_image_url, last_login_at = NOW() WHERE user_id = :user_id')
+        ->execute(['nickname' => $nickname, 'profile_image_url' => $profileImageUrl, 'user_id' => $user['user_id']]);
     $userId = (int) $user['user_id'];
 } else {
-    $pdo->prepare('INSERT INTO users (kakao_user_id, nickname, last_login_at) VALUES (:kakao_user_id, :nickname, NOW())')
-        ->execute(['kakao_user_id' => $kakaoId, 'nickname' => $nickname]);
+    $pdo->prepare('INSERT INTO users (kakao_user_id, nickname, profile_image_url, last_login_at) VALUES (:kakao_user_id, :nickname, :profile_image_url, NOW())')
+        ->execute(['kakao_user_id' => $kakaoId, 'nickname' => $nickname, 'profile_image_url' => $profileImageUrl]);
     $userId = (int) $pdo->lastInsertId();
 }
 
@@ -73,5 +74,5 @@ $jwt = JWT::encode($payload, $env['JWT_SECRET'], 'HS256');
 
 respond(true, '로그인 성공', [
     'token' => $jwt,
-    'user' => ['id' => $userId, 'kakao_id' => $kakaoId, 'nickname' => $nickname],
+    'user' => ['id' => $userId, 'kakao_id' => $kakaoId, 'nickname' => $nickname, 'profile_image_url' => $profileImageUrl],
 ]);
