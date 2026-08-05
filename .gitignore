@@ -1,4 +1,5 @@
 /vendor/
 /config/.env
+/config/fcm-key.json
 /uploads/*
 !/uploads/.gitkeep
