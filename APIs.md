@@ -36,6 +36,7 @@
 - [Checklist (체크리스트)](#checklist-체크리스트)
 - [Weather (날씨)](#weather-날씨)
 - [Profile - 내 기본 물품](#profile---내-기본-물품)
+- [Profile - 알림 설정](#profile---알림-설정)
 
 ---
 
@@ -729,3 +730,59 @@ S10 — 목적지·기간·날씨 예보를 바탕으로 옷차림/음식/숙소
 | 상태코드 | 상황 |
 |:--:|:--|
 |404|본인 소유가 아니거나 존재하지 않는 항목|
+
+---
+
+## Profile - 알림 설정
+
+`notification_settings` — 유저별 알림 수신 여부. 회원가입 시 전부 켜짐(`1`)으로 기본값 행이 자동 생성됩니다.
+
+### <span style="color: #61affe;">**GET**</span> 조회
+```
+/api/profile/notification-settings/get.php
+```
+
+**Response**
+```json
+{
+  "success": true,
+  "message": "조회 성공",
+  "data": {
+    "user_id": 1,
+    "d7_enabled": true,
+    "d3_enabled": true,
+    "d1_enabled": true,
+    "assignment_enabled": true,
+    "checklist_change_enabled": true,
+    "weather_enabled": true,
+    "created_at": "2026-08-07 12:00:00",
+    "updated_at": "2026-08-07 12:00:00"
+  }
+}
+```
+
+| 상태코드 | 상황 |
+|:--:|:--|
+|404|설정 행이 존재하지 않음(정상 가입자라면 발생하지 않음)|
+
+---
+
+### <span style="color: #49cc90;">**POST**</span> 수정
+```
+/api/profile/notification-settings/update.php
+```
+
+**Body**
+```json
+{ "d7_enabled": false, "assignment_enabled": true }
+```
+전부 선택값(boolean) — 보낸 필드만 갱신, 나머지는 기존 값 유지. 가능한 필드: `d7_enabled`, `d3_enabled`, `d1_enabled`, `assignment_enabled`, `checklist_change_enabled`, `weather_enabled`
+
+**Response**
+```json
+{ "success": true, "message": "수정 완료", "data": [] }
+```
+
+| 상태코드 | 상황 |
+|:--:|:--|
+|400|필드 값이 boolean(0/1)이 아님|
