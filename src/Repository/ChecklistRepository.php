@@ -6,9 +6,11 @@ namespace App\Repository;
 
 use PDO;
 
-// packing_items 테이블 접근 (체크리스트). 나머지 CRUD(list/check/assign/update/delete)는 Phase 5에서 채울 것
+// packing_items 테이블 접근 (체크리스트)
 class ChecklistRepository
 {
+    private const UPDATABLE_COLUMNS = ['item_name', 'category', 'priority', 'item_scope'];
+
     public function __construct(private PDO $pdo)
     {
     }
@@ -46,5 +48,99 @@ class ChecklistRepository
                 $scope === 'PERSONAL' ? $ownerUserId : null,
             ]);
         }
+    }
+
+    // 델타 조회(S11/S12) — since 있으면 변경분만(체크·할당·수정·삭제 전부 updated_at 갱신), 없으면 활성 항목 전체
+    public function findByTripSince(int $tripId, ?string $since): array
+    {
+        $sql = 'SELECT * FROM packing_items WHERE trip_id = ?';
+        $params = [$tripId];
+        if ($since !== null && $since !== '') {
+            $sql .= ' AND updated_at > ?';
+            $params[] = $since;
+        } else {
+            $sql .= " AND item_status != 'DELETED'";
+        }
+        $sql .= ' ORDER BY priority, packing_item_id';
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function findById(int $packingItemId): ?array
+    {
+        $stmt = $this->pdo->prepare('SELECT * FROM packing_items WHERE packing_item_id = ?');
+        $stmt->execute([$packingItemId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $row ?: null;
+    }
+
+    // BS02 항목 직접 추가 — 사용자가 손으로 추가한 항목(source=USER). PERSONAL이면 본인을 담당자로 바로 지정
+    public function create(int $tripId, int $userId, string $itemName, ?string $category, string $priority, string $scope): int
+    {
+        $stmt = $this->pdo->prepare(
+            "INSERT INTO packing_items (trip_id, created_by_user_id, item_name, category, priority, item_scope, source, assignee_user_id)
+             VALUES (?, ?, ?, ?, ?, ?, 'USER', ?)"
+        );
+        $stmt->execute([
+            $tripId,
+            $userId,
+            $itemName,
+            $category,
+            $priority,
+            $scope,
+            $scope === 'PERSONAL' ? $userId : null,
+        ]);
+
+        return (int) $this->pdo->lastInsertId();
+    }
+
+    public function toggleCheck(int $packingItemId, bool $isCompleted): void
+    {
+        $this->pdo->prepare('UPDATE packing_items SET is_completed = ?, completed_at = ? WHERE packing_item_id = ?')
+            ->execute([$isCompleted ? 1 : 0, $isCompleted ? date('Y-m-d H:i:s') : null, $packingItemId]);
+    }
+
+    // 담당자 지정/해제 — 본인만 가능하다는 규칙은 Service에서 검증하고 여기선 반영만 함
+    public function assign(int $packingItemId, ?int $assigneeUserId): void
+    {
+        $this->pdo->prepare('UPDATE packing_items SET assignee_user_id = ? WHERE packing_item_id = ?')
+            ->execute([$assigneeUserId, $packingItemId]);
+    }
+
+    // $fields 키는 UPDATABLE_COLUMNS로만 필터링 — 컬럼명을 직접 조립하므로 화이트리스트 필수
+    public function update(int $packingItemId, array $fields): void
+    {
+        $set = [];
+        $params = [];
+        foreach (self::UPDATABLE_COLUMNS as $column) {
+            if (array_key_exists($column, $fields)) {
+                $set[] = "$column = ?";
+                $params[] = $fields[$column];
+            }
+        }
+        if ($set === []) {
+            return;
+        }
+        $params[] = $packingItemId;
+
+        $this->pdo->prepare('UPDATE packing_items SET ' . implode(', ', $set) . ' WHERE packing_item_id = ?')
+            ->execute($params);
+    }
+
+    public function softDelete(int $packingItemId): void
+    {
+        $this->pdo->prepare("UPDATE packing_items SET item_status = 'DELETED', deleted_at = NOW() WHERE packing_item_id = ?")
+            ->execute([$packingItemId]);
+    }
+
+    // 재분석(F-LGTOBW) 시 이전 AI 추천 항목만 정리 — 사용자가 직접 추가/수정한 항목(source=USER)은 보존
+    public function softDeleteAiItemsByTrip(int $tripId): void
+    {
+        $this->pdo->prepare("UPDATE packing_items SET item_status = 'DELETED', deleted_at = NOW() WHERE trip_id = ? AND source = 'AI' AND item_status = 'ACTIVE'")
+            ->execute([$tripId]);
     }
 }
