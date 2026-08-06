@@ -63,16 +63,18 @@ class WeatherService
         return $result;
     }
 
+    // GET /api/weather/forecast.php?trip_id= — city/start_date/end_date 대신 trip_id로 목적지·기간을 자동으로 채우는 얇은 래퍼 (E-2)
+    public function getForecastByTrip(int $tripId): array
+    {
+        $trip = $this->requireConfirmedTrip($tripId);
+
+        return $this->getForecast($trip['destination_city'], $trip['start_date'], $trip['end_date']);
+    }
+
     // GET /api/weather/feedback.php — 여행 목적지·기간·날씨 예보 기준 의·식·주 GPT 조언 (S10 WeatherFeedbackActivity)
     public function generateFeedback(int $tripId): array
     {
-        $trip = $this->tripRepository->findById($tripId);
-        if ($trip === null) {
-            throw new RuntimeException('여행방을 찾을 수 없습니다.');
-        }
-        if (!$trip['destination_city'] || !$trip['start_date'] || !$trip['end_date']) {
-            throw new RuntimeException('여행 목적지·기간이 아직 확정되지 않았습니다.');
-        }
+        $trip = $this->requireConfirmedTrip($tripId);
 
         $cacheKey = "weather_feedback:{$tripId}";
         $cached = $this->cache->get($cacheKey);
@@ -86,6 +88,20 @@ class WeatherService
         $this->cache->put($cacheKey, $feedback, self::CACHE_TTL_SECONDS);
 
         return $feedback;
+    }
+
+    // trip_id로 방을 찾고 목적지·기간이 확정돼 있는지 확인 (getForecastByTrip/generateFeedback 공용)
+    private function requireConfirmedTrip(int $tripId): array
+    {
+        $trip = $this->tripRepository->findById($tripId);
+        if ($trip === null) {
+            throw new RuntimeException('여행방을 찾을 수 없습니다.');
+        }
+        if (!$trip['destination_city'] || !$trip['start_date'] || !$trip['end_date']) {
+            throw new RuntimeException('여행 목적지·기간이 아직 확정되지 않았습니다.');
+        }
+
+        return $trip;
     }
 
     // OpenWeatherMap 날씨 코드(200~232 뇌우 / 300~600대 비 / 600대 눈 / 700대·801+ 흐림 / 800 맑음)를 Figma WeatherIcon 4종으로 단순화

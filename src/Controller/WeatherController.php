@@ -19,18 +19,23 @@ class WeatherController
     {
     }
 
-    // GET /api/weather/forecast.php?city=&start_date=&end_date=
+    // GET /api/weather/forecast.php?city=&start_date=&end_date= 또는 ?trip_id=(E-2, 참여자 전용)
     public function forecast(): void
     {
         if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
             ApiResponse::send(false, 'GET만 허용됩니다.', [], 405);
         }
 
+        if (isset($_GET['trip_id'])) {
+            $this->forecastByTrip((int) $_GET['trip_id']);
+            return;
+        }
+
         $city = $_GET['city'] ?? null;
         $startDate = $_GET['start_date'] ?? null;
         $endDate = $_GET['end_date'] ?? null;
         if (!$city || !$startDate || !$endDate) {
-            ApiResponse::send(false, 'city, start_date, end_date가 필요합니다.', [], 400);
+            ApiResponse::send(false, 'city, start_date, end_date 또는 trip_id가 필요합니다.', [], 400);
         }
 
         try {
@@ -43,6 +48,37 @@ class WeatherController
         }
 
         ApiResponse::send(true, '날씨 조회 성공', $result);
+    }
+
+    private function forecastByTrip(int $tripId): void
+    {
+        $user = AuthMiddleware::handle();
+        if ($tripId === 0) {
+            ApiResponse::send(false, 'trip_id가 필요합니다.', [], 400);
+        }
+        TripMemberMiddleware::handle($this->pdo, $tripId, $user['id']);
+
+        try {
+            $result = $this->weatherService->getForecastByTrip($tripId);
+        } catch (RuntimeException $e) {
+            ApiResponse::send(false, $e->getMessage(), [], $this->tripErrorStatus($e->getMessage()));
+        } catch (GuzzleException $e) {
+            ApiResponse::send(false, '날씨 정보를 가져오지 못했습니다.', [], 502);
+        }
+
+        ApiResponse::send(true, '날씨 조회 성공', $result);
+    }
+
+    // trip_id 기반 조회(forecastByTrip/feedback 공용)의 RuntimeException 메시지를 상태코드로 변환
+    private function tripErrorStatus(string $message): int
+    {
+        if (str_contains($message, '찾을 수 없습니다')) {
+            return 404;
+        }
+        if (str_contains($message, '확정되지 않았습니다')) {
+            return 400;
+        }
+        return 502;
     }
 
     // GET /api/weather/feedback.php?trip_id= — 목적지 날씨 기반 의·식·주 GPT 조언 (S10 WeatherFeedbackActivity)
@@ -62,9 +98,7 @@ class WeatherController
         try {
             $result = $this->weatherService->generateFeedback($tripId);
         } catch (RuntimeException $e) {
-            $status = str_contains($e->getMessage(), '찾을 수 없습니다') ? 404
-                : (str_contains($e->getMessage(), '확정되지 않았습니다') ? 400 : 502);
-            ApiResponse::send(false, $e->getMessage(), [], $status);
+            ApiResponse::send(false, $e->getMessage(), [], $this->tripErrorStatus($e->getMessage()));
         } catch (GuzzleException $e) {
             ApiResponse::send(false, '날씨 조언을 가져오지 못했습니다.', [], 502);
         }
