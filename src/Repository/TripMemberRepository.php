@@ -29,10 +29,15 @@ class TripMemberRepository
             ->execute([$tripId, $userId, $role]);
     }
 
+    // 안드로이드 아바타 스택(S03)·멤버 목록(S09) 표시용으로 users 조인해서 nickname/profile_image_url도 같이 반환
     public function findByTripId(int $tripId): array
     {
         $stmt = $this->pdo->prepare(
-            "SELECT * FROM trip_members WHERE trip_id = ? AND member_status = 'JOINED' ORDER BY joined_at ASC"
+            "SELECT tm.*, u.nickname, u.profile_image_url
+             FROM trip_members tm
+             JOIN users u ON u.user_id = tm.user_id
+             WHERE tm.trip_id = ? AND tm.member_status = 'JOINED'
+             ORDER BY tm.joined_at ASC"
         );
         $stmt->execute([$tripId]);
 

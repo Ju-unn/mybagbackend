@@ -39,9 +39,20 @@ class TripService
             throw new RuntimeException('본인이 요청한 분석 결과로만 방을 생성할 수 있습니다.');
         }
 
+        $result = $analysis['result_json'];
+
         $this->pdo->beginTransaction();
         try {
-            $tripId = $this->tripRepository->create($ownerUserId, $tripName, $expectedMemberCount);
+            $tripId = $this->tripRepository->create(
+                $ownerUserId,
+                $tripName,
+                $expectedMemberCount,
+                isset($result['is_overseas']) ? ($result['is_overseas'] ? 'OVERSEAS' : 'DOMESTIC') : null,
+                $result['destination_country'] ?? null,
+                $result['destination_city'] ?? null,
+                $result['start_date'] ?? null,
+                $result['end_date'] ?? null
+            );
             $this->memberRepository->addOwner($tripId, $ownerUserId);
             $this->analysisRepository->attachToTrip($analysisId, $tripId);
             $this->uploadRepository->attachToTrip($analysis['input_upload_ids'], $tripId);

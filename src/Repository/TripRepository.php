@@ -13,14 +13,22 @@ class TripRepository
     {
     }
 
-    // S08 '방 생성 완료' 시점에 이름·인원·방장만으로 생성 (목적지 등은 그때까지 미확정 — Phase 4 섹션 설계)
-    public function create(int $ownerUserId, string $tripName, int $expectedMemberCount): int
-    {
+    // S08 '방 생성 완료' 시점에 생성. 목적지/기간/국내외 여부는 analyze 결과를 그대로 반영 (Phase 4 섹션 설계)
+    public function create(
+        int $ownerUserId,
+        string $tripName,
+        int $expectedMemberCount,
+        ?string $tripType,
+        ?string $destinationCountry,
+        ?string $destinationCity,
+        ?string $startDate,
+        ?string $endDate
+    ): int {
         $stmt = $this->pdo->prepare(
-            "INSERT INTO trips (owner_user_id, trip_name, expected_member_count, status)
-             VALUES (?, ?, ?, 'CREATED')"
+            "INSERT INTO trips (owner_user_id, trip_name, expected_member_count, trip_type, destination_country, destination_city, start_date, end_date, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'CREATED')"
         );
-        $stmt->execute([$ownerUserId, $tripName, $expectedMemberCount]);
+        $stmt->execute([$ownerUserId, $tripName, $expectedMemberCount, $tripType, $destinationCountry, $destinationCity, $startDate, $endDate]);
 
         return (int) $this->pdo->lastInsertId();
     }
