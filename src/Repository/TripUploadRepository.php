@@ -47,4 +47,16 @@ class TripUploadRepository
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+
+    // '방 생성 완료' 시점에 trip_id를 채움 (Phase 4 create.php 4번 단계)
+    public function attachToTrip(array $uploadIds, int $tripId): void
+    {
+        if ($uploadIds === []) {
+            return;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($uploadIds), '?'));
+        $this->pdo->prepare("UPDATE trip_uploads SET trip_id = ? WHERE upload_id IN ({$placeholders})")
+            ->execute([$tripId, ...$uploadIds]);
+    }
 }

@@ -47,4 +47,29 @@ class AnalysisRepository
         $stmt = $this->pdo->prepare('UPDATE ai_analyses SET result_json = ? WHERE analysis_id = ?');
         $stmt->execute([json_encode($resultJson, JSON_UNESCAPED_UNICODE), $analysisId]);
     }
+
+    // create.php에서 packing_items 생성 + 첨부 파일 삭제에 필요한 두 필드만 조회
+    public function findForTripCreation(int $analysisId, int $userId): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT input_upload_ids, result_json FROM ai_analyses WHERE analysis_id = ? AND requested_by_user_id = ?'
+        );
+        $stmt->execute([$analysisId, $userId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            return null;
+        }
+
+        return [
+            'input_upload_ids' => json_decode($row['input_upload_ids'], true) ?? [],
+            'result_json' => json_decode($row['result_json'], true) ?? [],
+        ];
+    }
+
+    // '방 생성 완료' 시점에 trip_id를 채움 (Phase 4 create.php 3번 단계)
+    public function attachToTrip(int $analysisId, int $tripId): void
+    {
+        $this->pdo->prepare('UPDATE ai_analyses SET trip_id = ? WHERE analysis_id = ?')
+            ->execute([$tripId, $analysisId]);
+    }
 }

@@ -41,4 +41,12 @@ class FileUploader
             'file_size' => $file['size'],
         ];
     }
+
+    // '방 생성 완료' 시점에 uploads/temp/ 임시 파일 정리 (Phase 4 create.php 6번 단계) — 이미 없으면 조용히 무시
+    public function delete(string $path): void
+    {
+        if (is_file($path)) {
+            unlink($path);
+        }
+    }
 }
