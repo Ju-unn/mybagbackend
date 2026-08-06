@@ -10,9 +10,15 @@ use App\Repository\TripUploadRepository;
 use App\Support\FileUploader;
 use RuntimeException;
 
-// 일정·숙소 이미지 업로드/GPT 분석 오케스트레이션. 확정(confirm)은 별도 구현
+// 일정·숙소 이미지 업로드/GPT 분석/확정 오케스트레이션
 class ItineraryService
 {
+    // S07 ScheduleConfirmActivity에서 '수정' 텍스트 버튼으로 인라인 수정 가능한 필드만 (README 4-3 섹션)
+    private const EDITABLE_FIELDS = [
+        'destination_country', 'destination_city', 'start_date', 'end_date',
+        'transport_mode', 'accommodation_name',
+    ];
+
     public function __construct(
         private FileUploader $fileUploader,
         private TripUploadRepository $uploadRepository,
@@ -47,6 +53,25 @@ class ItineraryService
 
         $result = $this->openAi->analyzeItinerary($images);
         $analysisId = $this->analysisRepository->create($userId, $uploadIds, $this->openAi->getModel(), $result);
+
+        return ['analysis_id' => $analysisId] + $result;
+    }
+
+    // $fields: EDITABLE_FIELDS 중 사용자가 고친 것만 담아 전달 (미포함 필드는 기존 값 유지)
+    public function confirm(int $userId, int $analysisId, array $fields): array
+    {
+        $result = $this->analysisRepository->findResultById($analysisId, $userId);
+        if ($result === null) {
+            throw new RuntimeException('본인이 요청한 분석만 확정할 수 있습니다.');
+        }
+
+        foreach (self::EDITABLE_FIELDS as $field) {
+            if (array_key_exists($field, $fields)) {
+                $result[$field] = $fields[$field];
+            }
+        }
+
+        $this->analysisRepository->updateResult($analysisId, $result);
 
         return ['analysis_id' => $analysisId] + $result;
     }

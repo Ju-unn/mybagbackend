@@ -70,4 +70,30 @@ class ItineraryController
 
         ApiResponse::send(true, '분석 완료', $result);
     }
+
+    // POST /api/itinerary/confirm.php (JSON body: {"analysis_id": 1, "destination_city": "오사카", ...})
+    // S07에서 사용자가 고친 필드만 보내면 되고, 안 보낸 필드는 기존 분석 결과 그대로 유지됨
+    public function confirm(): void
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            ApiResponse::send(false, 'POST만 허용됩니다.', [], 405);
+        }
+
+        $user = AuthMiddleware::handle();
+
+        $body = json_decode((string) file_get_contents('php://input'), true) ?? [];
+        $analysisId = $body['analysis_id'] ?? null;
+        if (!$analysisId) {
+            ApiResponse::send(false, 'analysis_id가 필요합니다.', [], 400);
+        }
+        unset($body['analysis_id']);
+
+        try {
+            $result = $this->itineraryService->confirm($user['id'], (int) $analysisId, $body);
+        } catch (RuntimeException $e) {
+            ApiResponse::send(false, $e->getMessage(), [], 400);
+        }
+
+        ApiResponse::send(true, '확정 완료', $result);
+    }
 }
