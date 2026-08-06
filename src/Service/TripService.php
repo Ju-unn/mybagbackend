@@ -80,16 +80,10 @@ class TripService
         return ['trip_id' => $tripId, 'invite_code' => $inviteCode];
     }
 
-    // 홈(S03) — TripMemberMiddleware 없이 호출(본인 user_id 기준 조회라 권한 체크 불필요)
-    public function listMyTrips(int $userId): array
+    // 홈(S03, $upcoming=true) / 보관함(S14, $upcoming=false) 공용 — TripMemberMiddleware 없이 호출(본인 user_id 기준 조회라 권한 체크 불필요)
+    public function listMyTrips(int $userId, bool $upcoming = true): array
     {
-        return $this->tripRepository->findByUserId($userId);
-    }
-
-    // 보관함(S14)
-    public function listArchive(int $userId): array
-    {
-        return $this->tripRepository->findArchivedByUserId($userId);
+        return $this->tripRepository->findByUserId($userId, $upcoming);
     }
 
     // 방 상세(S09) — 멤버 여부는 컨트롤러의 TripMemberMiddleware가 먼저 확인함

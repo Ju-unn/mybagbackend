@@ -58,18 +58,12 @@ class TripController
         ApiResponse::send(true, '방 생성 완료', $result);
     }
 
-    // GET /api/trips/list.php — 내가 속한 방 목록 (홈 S03)
+    // GET /api/trips/list.php?tab=ongoing|past — 내가 속한 방 목록. tab 생략·ongoing이면 홈(S03), past면 보관함(S14)
     public function list(): void
     {
         $user = AuthMiddleware::handle();
-        ApiResponse::send(true, '조회 성공', ['trips' => $this->tripService->listMyTrips($user['id'])]);
-    }
-
-    // GET /api/trips/archive.php — 보관된 방 목록 (S14)
-    public function archive(): void
-    {
-        $user = AuthMiddleware::handle();
-        ApiResponse::send(true, '조회 성공', ['trips' => $this->tripService->listArchive($user['id'])]);
+        $upcoming = ($_GET['tab'] ?? 'ongoing') !== 'past';
+        ApiResponse::send(true, '조회 성공', ['trips' => $this->tripService->listMyTrips($user['id'], $upcoming)]);
     }
 
     // GET /api/trips/detail.php?trip_id=

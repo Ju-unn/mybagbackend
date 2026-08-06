@@ -42,29 +42,21 @@ class TripRepository
         return $trip ?: null;
     }
 
-    // 홈(S03) — 보관되지 않은 방만, 임박한 일정 순
-    public function findByUserId(int $userId): array
+    // 홈(S03, $upcoming=true, 임박한 일정 순) / 보관함(S14, $upcoming=false, 최근 종료 순) 공용
+    // 상태 컬럼(trips.status) 대신 end_date로 판정 — status를 ARCHIVED로 바꾸는 로직이 없어도(15번 섹션 E-1) 동작함
+    public function findByUserId(int $userId, bool $upcoming = true): array
     {
-        $stmt = $this->pdo->prepare(
-            "SELECT t.* FROM trips t
-             JOIN trip_members m ON m.trip_id = t.trip_id
-             WHERE m.user_id = ? AND m.member_status = 'JOINED' AND t.status != 'ARCHIVED'
-             ORDER BY t.start_date ASC"
-        );
-        $stmt->execute([$userId]);
+        $sql = $upcoming
+            ? "SELECT t.* FROM trips t
+               JOIN trip_members m ON m.trip_id = t.trip_id
+               WHERE m.user_id = ? AND m.member_status = 'JOINED' AND t.end_date >= CURDATE()
+               ORDER BY t.start_date ASC"
+            : "SELECT t.* FROM trips t
+               JOIN trip_members m ON m.trip_id = t.trip_id
+               WHERE m.user_id = ? AND m.member_status = 'JOINED' AND t.end_date < CURDATE()
+               ORDER BY t.end_date DESC";
 
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    // 보관함(S14) — status를 ARCHIVED로 바꾸는 주체·시점은 아직 미정(팀 결정 필요), 지금은 조회만 구현
-    public function findArchivedByUserId(int $userId): array
-    {
-        $stmt = $this->pdo->prepare(
-            "SELECT t.* FROM trips t
-             JOIN trip_members m ON m.trip_id = t.trip_id
-             WHERE m.user_id = ? AND m.member_status = 'JOINED' AND t.status = 'ARCHIVED'
-             ORDER BY t.end_date DESC"
-        );
+        $stmt = $this->pdo->prepare($sql);
         $stmt->execute([$userId]);
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
