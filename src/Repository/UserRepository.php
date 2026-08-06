@@ -34,6 +34,12 @@ class UserRepository
 
         $this->pdo->prepare('INSERT INTO users (kakao_user_id, nickname, profile_image_url, last_login_at) VALUES (:kakao_user_id, :nickname, :profile_image_url, NOW())')
             ->execute(['kakao_user_id' => $kakaoId, 'nickname' => $nickname, 'profile_image_url' => $profileImageUrl]);
-        return (int) $this->pdo->lastInsertId();
+        $userId = (int) $this->pdo->lastInsertId();
+
+        // notification_settings 컬럼이 전부 DEFAULT 1이라 user_id만 넣으면 "전체 알림 켜짐" 기본값으로 생성됨
+        $this->pdo->prepare('INSERT INTO notification_settings (user_id) VALUES (:user_id)')
+            ->execute(['user_id' => $userId]);
+
+        return $userId;
     }
 }

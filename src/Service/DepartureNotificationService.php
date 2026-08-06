@@ -56,6 +56,7 @@ class DepartureNotificationService
                     'trip_id' => $tripId,
                     'trip_name' => $row['trip_name'],
                     'destination_city' => $row['destination_city'],
+                    'start_date' => $row['start_date'],
                     'user_ids' => [],
                 ];
             }
