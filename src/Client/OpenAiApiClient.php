@@ -20,6 +20,11 @@ class OpenAiApiClient
     ) {
     }
 
+    public function getModel(): string
+    {
+        return $this->model;
+    }
+
     // 키/모델 접근 확인용 최소 호출 (이미지 없음). 실패 시 상태코드·본문을 그대로 예외 메시지에 담아 원인 파악 쉽게 함
     public function ping(): string
     {
