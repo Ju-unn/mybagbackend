@@ -153,4 +153,71 @@ TXT;
 
         return json_decode($text, true) ?? [];
     }
+
+    private const FEEDBACK_PROMPT = <<<'TXT'
+여행지: {{CITY}}, {{COUNTRY}}
+여행 기간: {{START}} ~ {{END}}
+일별 날씨 예보(JSON): {{WEATHER}}
+
+위 여행지와 날씨 예보를 참고해서 여행자에게 실용적인 조언을 한국어로 작성하세요.
+- clothing: 챙기면 좋을 옷차림 조언 (2~4문장)
+- food: 현지 음식·식당 관련 참고할 점 (2~4문장)
+- accommodation_notes: 숙소 이용 시 유의사항 (2~4문장)
+날씨 예보가 비어 있거나 정보가 부족하면 목적지 기준 일반적인 여행 상식 선에서 답하세요.
+TXT;
+
+    private const FEEDBACK_SCHEMA = [
+        'type' => 'object',
+        'properties' => [
+            'clothing' => ['type' => 'string'],
+            'food' => ['type' => 'string'],
+            'accommodation_notes' => ['type' => 'string'],
+        ],
+        'required' => ['clothing', 'food', 'accommodation_notes'],
+        'additionalProperties' => false,
+    ];
+
+    // $trip: trips 테이블 행(destination_country/city/start_date/end_date 사용), $weatherDays: WeatherService::getForecast()의 days 배열
+    public function generateWeatherFeedback(array $trip, array $weatherDays): array
+    {
+        $prompt = strtr(self::FEEDBACK_PROMPT, [
+            '{{CITY}}' => (string) ($trip['destination_city'] ?? ''),
+            '{{COUNTRY}}' => (string) ($trip['destination_country'] ?? ''),
+            '{{START}}' => (string) ($trip['start_date'] ?? ''),
+            '{{END}}' => (string) ($trip['end_date'] ?? ''),
+            '{{WEATHER}}' => json_encode($weatherDays, JSON_UNESCAPED_UNICODE),
+        ]);
+
+        $client = new Client(['timeout' => $this->timeout]);
+
+        try {
+            $res = $client->post(self::RESPONSES_URL, [
+                'headers' => ['Authorization' => 'Bearer ' . $this->apiKey],
+                'json' => [
+                    'model' => $this->model,
+                    'input' => $prompt,
+                    'text' => [
+                        'format' => [
+                            'type' => 'json_schema',
+                            'name' => 'weather_feedback',
+                            'schema' => self::FEEDBACK_SCHEMA,
+                            'strict' => true,
+                        ],
+                    ],
+                ],
+            ]);
+        } catch (RequestException $e) {
+            $status = $e->getResponse()?->getStatusCode();
+            $body = $e->getResponse()?->getBody();
+            throw new RuntimeException("OpenAI 날씨 피드백 생성 실패 (HTTP {$status}): " . ($body ? (string) $body : $e->getMessage()));
+        }
+
+        $data = json_decode((string) $res->getBody(), true);
+        $text = $data['output'][0]['content'][0]['text'] ?? null;
+        if ($text === null) {
+            throw new RuntimeException('OpenAI 응답에서 결과 텍스트를 찾지 못했습니다: ' . json_encode($data));
+        }
+
+        return json_decode($text, true) ?? [];
+    }
 }

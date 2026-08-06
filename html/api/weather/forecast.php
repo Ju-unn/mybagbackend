@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../../bootstrap/app.php';
 
+use App\Client\OpenAiApiClient;
 use App\Client\OpenMeteoApiClient;
 use App\Client\OpenWeatherApiClient;
 use App\Controller\WeatherController;
 use App\Repository\ApiCacheRepository;
+use App\Repository\TripRepository;
 use App\Service\WeatherService;
 use App\Support\ApiResponse;
 
@@ -19,9 +21,11 @@ try {
 
 $env = load_env();
 
-$controller = new WeatherController(new WeatherService(
+$controller = new WeatherController($pdo, new WeatherService(
     new OpenMeteoApiClient(),
     new OpenWeatherApiClient($env['OPENWEATHER_API_KEY']),
     new ApiCacheRepository($pdo),
+    new TripRepository($pdo),
+    new OpenAiApiClient($env['OPENAI_API_KEY'], $env['OPENAI_MODEL']),
 ));
 $controller->forecast();
