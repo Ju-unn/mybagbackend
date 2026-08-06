@@ -32,4 +32,12 @@ class NotificationService
 
         return $result['success'];
     }
+
+    // 여러 사용자(각자 여러 기기 가능)에게 같은 data 페이로드 발송 — 토큰 없는 사용자는 자동으로 스킵됨
+    public function notifyUsers(array $userIds, array $data): void
+    {
+        foreach ($this->notificationRepository->findActiveTokensByUserIds($userIds) as $token) {
+            $this->notify($token, $data);
+        }
+    }
 }

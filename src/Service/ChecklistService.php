@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Repository\AnalysisRepository;
 use App\Repository\ChecklistRepository;
+use App\Repository\TripMemberRepository;
 use PDO;
 use RuntimeException;
 use Throwable;
@@ -20,6 +21,8 @@ class ChecklistService
         private PDO $pdo,
         private ChecklistRepository $checklistRepository,
         private AnalysisRepository $analysisRepository,
+        private TripMemberRepository $tripMemberRepository,
+        private NotificationService $notificationService,
     ) {
     }
 
@@ -67,6 +70,24 @@ class ChecklistService
         }
 
         $this->checklistRepository->assign((int) $item['packing_item_id'], $assigneeUserId);
+
+        if ($assigneeUserId !== null) {
+            $this->notifyOtherMembers((int) $item['trip_id'], $userId, [
+                'type' => 'CHECKLIST_ASSIGNED',
+                'trip_id' => (string) $item['trip_id'],
+                'item_id' => (string) $item['packing_item_id'],
+                'item_name' => (string) $item['item_name'],
+            ]);
+        }
+    }
+
+    // 담당자 지정 시 본인을 제외한 트립 멤버 전원에게 발송 — 토큰 없는 멤버는 자동으로 스킵됨
+    private function notifyOtherMembers(int $tripId, int $excludeUserId, array $data): void
+    {
+        $memberIds = array_map('intval', array_column($this->tripMemberRepository->findByTripId($tripId), 'user_id'));
+        $recipientIds = array_values(array_filter($memberIds, fn (int $id) => $id !== $excludeUserId));
+
+        $this->notificationService->notifyUsers($recipientIds, $data);
     }
 
     public function update(array $item, array $fields): void

@@ -40,4 +40,19 @@ class NotificationRepository
         $this->pdo->prepare('UPDATE fcm_tokens SET is_active = 0 WHERE token = :token')
             ->execute(['token' => $token]);
     }
+
+    // 담당자 지정 알림 등 여러 사용자에게 한 번에 보낼 때 활성 토큰 조회
+    public function findActiveTokensByUserIds(array $userIds): array
+    {
+        if ($userIds === []) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($userIds), '?'));
+        $stmt = $this->pdo->prepare(
+            "SELECT token FROM fcm_tokens WHERE user_id IN ($placeholders) AND is_active = 1"
+        );
+        $stmt->execute(array_values($userIds));
+
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
 }

@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../../bootstrap/app.php';
 
+use App\Client\FcmApiClient;
 use App\Controller\ChecklistController;
 use App\Repository\AnalysisRepository;
 use App\Repository\ChecklistRepository;
+use App\Repository\NotificationRepository;
+use App\Repository\TripMemberRepository;
 use App\Service\ChecklistService;
+use App\Service\NotificationService;
 use App\Support\ApiResponse;
 
 try {
@@ -19,6 +23,8 @@ try {
 $controller = new ChecklistController($pdo, new ChecklistService(
     $pdo,
     new ChecklistRepository($pdo),
-    new AnalysisRepository($pdo)
+    new AnalysisRepository($pdo),
+    new TripMemberRepository($pdo),
+    new NotificationService(new FcmApiClient(), new NotificationRepository($pdo))
 ));
 $controller->list();
