@@ -73,6 +73,7 @@ class ItineraryController
 
     // POST /api/itinerary/confirm.php (JSON body: {"analysis_id": 1, "destination_city": "오사카", ...})
     // S07에서 사용자가 고친 필드만 보내면 되고, 안 보낸 필드는 기존 분석 결과 그대로 유지됨
+    // 목적지·기간이 실제로 바뀐 경우 서버가 GPT를 재호출해 반입규정·추천준비물을 새 목적지 기준으로 갱신함
     public function confirm(): void
     {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -92,6 +93,8 @@ class ItineraryController
             $result = $this->itineraryService->confirm($user['id'], (int) $analysisId, $body);
         } catch (RuntimeException $e) {
             ApiResponse::send(false, $e->getMessage(), [], 400);
+        } catch (GuzzleException $e) {
+            ApiResponse::send(false, 'AI 재분석 요청에 실패했습니다.', [], 502);
         }
 
         ApiResponse::send(true, '확정 완료', $result);

@@ -360,7 +360,7 @@ JWT는 stateless라 서버 측 블랙리스트는 없음 — 클라이언트가 
 ```
 /api/itinerary/confirm.php
 ```
-S07에서 사용자가 수정한 필드만 보내면 됨 — 안 보낸 필드는 분석 결과 그대로 유지.
+S07에서 사용자가 수정한 필드만 보내면 됨 — 안 보낸 필드는 분석 결과 그대로 유지. `destination_country`/`destination_city`/`start_date`/`end_date` 중 실제로 값이 바뀐 필드가 있으면, 서버가 그 값 그대로 저장하지 않고 GPT를 재호출해 `restricted_items`/`recommended_items`를 새 목적지·기간 기준으로 다시 산출한 뒤 저장함(사진 재업로드 불필요). 이 필드들이 안 바뀌었으면(예: `accommodation_name`만 수정) 재분석 없이 그대로 저장.
 
 **Body**
 ```json
@@ -385,6 +385,7 @@ S07에서 사용자가 수정한 필드만 보내면 됨 — 안 보낸 필드�
 | 상태코드 | 상황 |
 |:--:|:--|
 |400|`analysis_id` 누락, 본인이 요청하지 않은 분석|
+|502|(목적지·기간 변경 시) GPT 재분석 요청 실패|
 
 ---
 

@@ -19,6 +19,9 @@ class ItineraryService
         'transport_mode', 'accommodation_name',
     ];
 
+    // 이 중 하나라도 바뀌면 반입규정·추천준비물이 더 이상 안 맞을 수 있어 재분석이 필요함
+    private const CORE_FIELDS = ['destination_country', 'destination_city', 'start_date', 'end_date'];
+
     public function __construct(
         private FileUploader $fileUploader,
         private TripUploadRepository $uploadRepository,
@@ -58,6 +61,8 @@ class ItineraryService
     }
 
     // $fields: EDITABLE_FIELDS 중 사용자가 고친 것만 담아 전달 (미포함 필드는 기존 값 유지)
+    // CORE_FIELDS(목적지·기간)가 실제로 바뀐 경우, 그 값 그대로 저장하지 않고 GPT를 재호출해
+    // restricted_items/recommended_items를 새 목적지 기준으로 갱신한 뒤 저장한다.
     public function confirm(int $userId, int $analysisId, array $fields): array
     {
         $result = $this->analysisRepository->findResultById($analysisId, $userId);
@@ -65,10 +70,21 @@ class ItineraryService
             throw new RuntimeException('본인이 요청한 분석만 확정할 수 있습니다.');
         }
 
+        $coreChanged = false;
         foreach (self::EDITABLE_FIELDS as $field) {
-            if (array_key_exists($field, $fields)) {
-                $result[$field] = $fields[$field];
+            if (!array_key_exists($field, $fields) || $fields[$field] === $result[$field]) {
+                continue;
             }
+            if (in_array($field, self::CORE_FIELDS, true)) {
+                $coreChanged = true;
+            }
+            $result[$field] = $fields[$field];
+        }
+
+        if ($coreChanged) {
+            $fresh = $this->openAi->reanalyzeRestrictionsAndItems($result);
+            $result['restricted_items'] = $fresh['restricted_items'] ?? [];
+            $result['recommended_items'] = $fresh['recommended_items'] ?? [];
         }
 
         $this->analysisRepository->updateResult($analysisId, $result);

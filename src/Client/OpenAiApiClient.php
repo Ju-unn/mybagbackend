@@ -220,4 +220,94 @@ TXT;
 
         return json_decode($text, true) ?? [];
     }
+
+    private const REANALYZE_PROMPT = <<<'TXT'
+여행지: {{CITY}}, {{COUNTRY}}
+여행 기간: {{START}} ~ {{END}}
+해외 여행 여부: {{IS_OVERSEAS}}
+이동수단: {{TRANSPORT}}
+
+위 여행 정보는 사용자가 S07 화면에서 직접 확인·수정한 값입니다. 이 값을 기준으로 아래 두 가지를 다시 산출하세요.
+- restricted_items: 목적지 기준 기내 반입 제한이 있는 품목만 (보조배터리, 액체류 등). 없으면 빈 배열
+- recommended_items: 목적지 날씨·여행지 특성을 고려한 준비물 10~20개, 중요도별로 분류
+TXT;
+
+    private const REANALYZE_SCHEMA = [
+        'type' => 'object',
+        'properties' => [
+            'restricted_items' => [
+                'type' => 'array',
+                'items' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'item_name' => ['type' => 'string'],
+                        'restriction_type' => ['type' => 'string', 'enum' => ['PROHIBITED', 'CARRY_ON_ONLY', 'CHECKED_ONLY', 'LIMITED', 'CAUTION']],
+                        'reason' => ['type' => 'string'],
+                    ],
+                    'required' => ['item_name', 'restriction_type', 'reason'],
+                    'additionalProperties' => false,
+                ],
+            ],
+            'recommended_items' => [
+                'type' => 'array',
+                'items' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'item_name' => ['type' => 'string'],
+                        'category' => ['type' => 'string'],
+                        'priority' => ['type' => 'string', 'enum' => ['REQUIRED', 'RECOMMENDED', 'OPTIONAL']],
+                    ],
+                    'required' => ['item_name', 'category', 'priority'],
+                    'additionalProperties' => false,
+                ],
+            ],
+        ],
+        'required' => ['restricted_items', 'recommended_items'],
+        'additionalProperties' => false,
+    ];
+
+    // S07에서 목적지/기간이 수정된 경우 confirm()이 호출. 사진 없이 텍스트만으로 반입규정·추천준비물을 재산출
+    public function reanalyzeRestrictionsAndItems(array $fields): array
+    {
+        $prompt = strtr(self::REANALYZE_PROMPT, [
+            '{{CITY}}' => (string) ($fields['destination_city'] ?? ''),
+            '{{COUNTRY}}' => (string) ($fields['destination_country'] ?? ''),
+            '{{START}}' => (string) ($fields['start_date'] ?? ''),
+            '{{END}}' => (string) ($fields['end_date'] ?? ''),
+            '{{IS_OVERSEAS}}' => !empty($fields['is_overseas']) ? '예' : '아니오',
+            '{{TRANSPORT}}' => (string) ($fields['transport_mode'] ?? ''),
+        ]);
+
+        $client = new Client(['timeout' => $this->timeout]);
+
+        try {
+            $res = $client->post(self::RESPONSES_URL, [
+                'headers' => ['Authorization' => 'Bearer ' . $this->apiKey],
+                'json' => [
+                    'model' => $this->model,
+                    'input' => $prompt,
+                    'text' => [
+                        'format' => [
+                            'type' => 'json_schema',
+                            'name' => 'itinerary_reanalysis',
+                            'schema' => self::REANALYZE_SCHEMA,
+                            'strict' => true,
+                        ],
+                    ],
+                ],
+            ]);
+        } catch (RequestException $e) {
+            $status = $e->getResponse()?->getStatusCode();
+            $body = $e->getResponse()?->getBody();
+            throw new RuntimeException("OpenAI 재분석 실패 (HTTP {$status}): " . ($body ? (string) $body : $e->getMessage()));
+        }
+
+        $data = json_decode((string) $res->getBody(), true);
+        $text = $data['output'][0]['content'][0]['text'] ?? null;
+        if ($text === null) {
+            throw new RuntimeException('OpenAI 응답에서 결과 텍스트를 찾지 못했습니다: ' . json_encode($data));
+        }
+
+        return json_decode($text, true) ?? [];
+    }
 }
