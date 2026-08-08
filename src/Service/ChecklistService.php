@@ -28,7 +28,16 @@ class ChecklistService
 
     public function listSince(int $tripId, ?string $since): array
     {
-        return $this->checklistRepository->findByTripSince($tripId, $since);
+        $items = $this->checklistRepository->findByTripSince($tripId, $since);
+
+        // PDO는 기본적으로 TINYINT를 문자열 "0"/"1"로 반환함 — json_encode 시 안드로이드 Gson의
+        // boolean 파싱("0"/"1" 문자열은 false로 잘못 해석됨)이 깨지지 않도록 명시적으로 bool 캐스팅
+        // (NotificationSettingsService::get()과 동일 패턴)
+        foreach ($items as &$item) {
+            $item['is_completed'] = (bool) $item['is_completed'];
+        }
+
+        return $items;
     }
 
     // BS02 항목 직접 추가
