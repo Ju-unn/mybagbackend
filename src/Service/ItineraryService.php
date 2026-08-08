@@ -81,6 +81,12 @@ class ItineraryService
             $result[$field] = $fields[$field];
         }
 
+        // is_overseas는 destination_country로부터 결정되는 값이라 클라이언트가 따로 보내는 값을 신뢰하지 않고
+        // 목적지가 바뀔 때마다 국가명 기준으로 서버가 다시 계산한다 (안 그러면 국제→국내로 바꿔도 해외 규정이 그대로 남음)
+        if (array_key_exists('destination_country', $fields)) {
+            $result['is_overseas'] = !self::isDomesticCountry($result['destination_country'] ?? '');
+        }
+
         if ($coreChanged) {
             $fresh = $this->openAi->reanalyzeRestrictionsAndItems($result);
             $result['restricted_items'] = $fresh['restricted_items'] ?? [];
@@ -90,6 +96,17 @@ class ItineraryService
         $this->analysisRepository->updateResult($analysisId, $result);
 
         return ['analysis_id' => $analysisId] + $result;
+    }
+
+    private static function isDomesticCountry(string $country): bool
+    {
+        foreach (['대한민국', '한국', 'korea'] as $keyword) {
+            if (mb_stripos($country, $keyword) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // PHP 다중 업로드 $_FILES 구조([name][], [tmp_name][] ...)를 파일 1개당 배열로 분해
