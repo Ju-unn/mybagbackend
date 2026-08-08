@@ -59,7 +59,7 @@ class WeatherController
         TripMemberMiddleware::handle($this->pdo, $tripId, $user['id']);
 
         try {
-            $result = $this->weatherService->getForecastByTrip($tripId);
+            $result = $this->weatherService->getStoredForecast($tripId);
         } catch (RuntimeException $e) {
             ApiResponse::send(false, $e->getMessage(), [], $this->tripErrorStatus($e->getMessage()));
         } catch (GuzzleException $e) {
@@ -96,7 +96,7 @@ class WeatherController
         TripMemberMiddleware::handle($this->pdo, $tripId, $user['id']);
 
         try {
-            $result = $this->weatherService->generateFeedback($tripId);
+            $result = $this->weatherService->getStoredFeedback($tripId);
         } catch (RuntimeException $e) {
             ApiResponse::send(false, $e->getMessage(), [], $this->tripErrorStatus($e->getMessage()));
         } catch (GuzzleException $e) {

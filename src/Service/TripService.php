@@ -27,6 +27,7 @@ class TripService
         private TripUploadRepository $uploadRepository,
         private ChecklistRepository $checklistRepository,
         private FileUploader $fileUploader,
+        private WeatherService $weatherService,
     ) {
     }
 
@@ -75,6 +76,14 @@ class TripService
         // 파일 삭제는 커밋 후에만 — 롤백 시 원본이 남아있어야 재시도가 가능함 (Phase 4 섹션 6번 단계)
         foreach ($this->uploadRepository->findByIds($analysis['input_upload_ids'], $ownerUserId) as $upload) {
             $this->fileUploader->delete($upload['file_path']);
+        }
+
+        // 날씨·GPT 팁 최초 예열 — 방은 이미 커밋됐으니 외부 API가 실패해도 방 생성은 성공 처리하고
+        // 조용히 스킵한다(다음 D-7/D-3/D-1 체크포인트에서 재시도됨). "팁 보기"는 이 값이 없으면
+        // ready=false로 응답해서 클라이언트가 "n일 전에 갱신됩니다" 안내를 보여준다.
+        try {
+            $this->weatherService->refreshForTrip($tripId);
+        } catch (Throwable $e) {
         }
 
         return ['trip_id' => $tripId, 'invite_code' => $inviteCode];

@@ -585,14 +585,18 @@ S11 — **본인만** 자기 자신을 지정/해제할 수 있음(다른 사람
 ```
 /api/weather/forecast.php?trip_id=
 ```
-`trip_id`로 조회 시 참여자 전용(`TripMemberMiddleware`), 그 방의 목적지·기간을 자동으로 채워서 조회합니다. 3시간 TTL로 캐싱됨.
 
-**Response**
+- `city`/`start_date`/`end_date` 조회: 매 호출 라이브 API(24시간 TTL 캐싱).
+- **`trip_id` 조회(변경됨, 2026-08-08)**: 참여자 전용(`TripMemberMiddleware`). 더 이상 호출 시점에 라이브로 조회하지 않고, **방 생성 시점 + 출발 D-7/D-3/D-1 체크포인트에 미리 갱신해서 저장해둔 값만 반환**합니다(외부 API/GPT 비용 절감 목적). 아직 한 번도 갱신되지 않았으면(방 생성 직후 외부 API 실패 등) `ready: false`로 내려가니, 클라이언트는 이 경우 안내 문구를 보여줘야 합니다.
+
+**Response (정상 — ready: true)**
 ```json
 {
   "success": true,
   "message": "날씨 조회 성공",
   "data": {
+    "ready": true,
+    "next_refresh_at": null,
     "location": "Osaka",
     "days": [
       {
@@ -606,14 +610,27 @@ S11 — **본인만** 자기 자신을 지정/해제할 수 있음(다른 사람
   }
 }
 ```
-`condition`은 `sun` \| `cloud` \| `rain` \| `snow` 4종으로 단순화됨.
+`condition`은 `sun` \| `cloud` \| `rain` \| `snow` 4종으로 단순화됨. `city`/`start_date`/`end_date` 조회 시 `ready`/`next_refresh_at` 필드는 내려가지 않음(`trip_id` 조회 전용 필드).
+
+**Response (`trip_id` 조회, 아직 갱신 전 — ready: false)**
+```json
+{
+  "success": true,
+  "message": "날씨 조회 성공",
+  "data": {
+    "ready": false,
+    "next_refresh_at": "2026-08-21"
+  }
+}
+```
+`next_refresh_at`은 다음 자동 갱신 예정일(출발 D-7/D-3/D-1 중 가장 가까운 날짜). 출발이 임박해 남은 체크포인트가 없으면 `null`.
 
 | 상태코드 | 상황 |
 |:--:|:--|
 |400|`city`/`start_date`/`end_date` 또는 `trip_id` 누락, 여행 목적지·기간이 아직 확정 안 됨|
 |403|(`trip_id` 조회 시) 참여자가 아님|
 |404|(`trip_id` 조회 시) 존재하지 않는 여행방|
-|502|외부 날씨 API 호출 실패|
+|502|(`city`/`start_date`/`end_date` 조회 시) 외부 날씨 API 호출 실패|
 
 ---
 
@@ -621,17 +638,33 @@ S11 — **본인만** 자기 자신을 지정/해제할 수 있음(다른 사람
 ```
 /api/weather/feedback.php?trip_id=
 ```
-S10 — 목적지·기간·날씨 예보를 바탕으로 옷차림/음식/숙소 유의사항을 GPT로 생성. 참여자 전용, 3시간 TTL 캐싱.
+S10 — 목적지·기간·날씨 예보를 바탕으로 옷차림/음식/숙소 유의사항을 GPT로 생성. 참여자 전용.
 
-**Response**
+**변경됨(2026-08-08)**: 더 이상 클릭 시점에 GPT를 호출하지 않습니다. 방 생성 시점 + 출발 D-7/D-3/D-1 체크포인트에 미리 생성해서 저장해둔 값만 반환합니다(위 예보 조회 `trip_id` 케이스와 동일한 `ready`/`next_refresh_at` 규칙).
+
+**Response (정상 — ready: true)**
 ```json
 {
   "success": true,
   "message": "조회 성공",
   "data": {
+    "ready": true,
+    "next_refresh_at": null,
     "clothing": "낮 기온이 30도 안팎이라 통풍 잘 되는 얇은 옷을 준비하고...",
     "food": "현지 오코노미야키, 다코야키 등을 즐기되 여름철 위생에 유의...",
     "accommodation_notes": "숙소 예약 시 에어컨 여부를 미리 확인..."
+  }
+}
+```
+
+**Response (아직 갱신 전 — ready: false)**
+```json
+{
+  "success": true,
+  "message": "조회 성공",
+  "data": {
+    "ready": false,
+    "next_refresh_at": "2026-08-21"
   }
 }
 ```
@@ -641,7 +674,7 @@ S10 — 목적지·기간·날씨 예보를 바탕으로 옷차림/음식/숙소
 |400|`trip_id` 누락, 여행 목적지·기간이 아직 확정 안 됨|
 |403|참여자가 아님|
 |404|존재하지 않는 여행방|
-|502|GPT 호출 실패|
+|502|(방 생성/체크포인트 갱신 배치 내부) GPT 호출 실패 — 이 응답 자체에는 영향 없고 `ready: false`로만 나타남|
 
 ---
 

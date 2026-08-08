@@ -67,4 +67,20 @@ class TripRepository
         $this->pdo->prepare('UPDATE trips SET status = ? WHERE trip_id = ?')
             ->execute([$status, $tripId]);
     }
+
+    // 날씨 체크포인트 배치(WeatherRefreshService)용 — 오늘 기준 출발일이 정확히 $daysList 중 하나만큼 남은 trip_id 목록
+    public function findStartingInDays(array $daysList): array
+    {
+        if ($daysList === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($daysList), '?'));
+        $stmt = $this->pdo->prepare(
+            "SELECT trip_id FROM trips WHERE DATEDIFF(start_date, CURDATE()) IN ({$placeholders})"
+        );
+        $stmt->execute($daysList);
+
+        return array_map('intval', array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'trip_id'));
+    }
 }
