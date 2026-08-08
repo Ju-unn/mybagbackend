@@ -22,6 +22,9 @@ class ItineraryService
     // 이 중 하나라도 바뀌면 반입규정·추천준비물이 더 이상 안 맞을 수 있어 재분석이 필요함
     private const CORE_FIELDS = ['destination_country', 'destination_city', 'start_date', 'end_date'];
 
+    // 방 생성까지 안 가고 이탈한 고아 업로드/분석을 이 시간이 지나면 청소 대상으로 봄
+    private const ORPHAN_TTL_HOURS = 24;
+
     public function __construct(
         private FileUploader $fileUploader,
         private TripUploadRepository $uploadRepository,
@@ -33,6 +36,8 @@ class ItineraryService
     // $files: $_FILES['photos'] 형태(다중 파일 필드). 여러 장 저장 후 upload_id 목록 반환
     public function upload(int $userId, array $files, string $uploadType): array
     {
+        $this->cleanupOrphans($userId);
+
         $uploadIds = [];
         foreach (self::splitFiles($files) as $file) {
             $info = $this->fileUploader->store($file);
@@ -40,6 +45,22 @@ class ItineraryService
         }
 
         return $uploadIds;
+    }
+
+    // 방 생성 없이 이탈해 trip_id가 NULL로 남은 본인 소유 업로드/분석을 새 업로드 시도마다 청소
+    // (별도 cron 없이, 유저가 다시 활동할 때 자기 몫만 정리하는 절충안 — 서버현황.md 참고)
+    private function cleanupOrphans(int $userId): void
+    {
+        $orphans = $this->uploadRepository->findOrphans($userId, self::ORPHAN_TTL_HOURS);
+        if ($orphans === []) {
+            return;
+        }
+
+        foreach ($orphans as $orphan) {
+            $this->fileUploader->delete($orphan['file_path']);
+        }
+        $this->uploadRepository->deleteByIds(array_column($orphans, 'upload_id'));
+        $this->analysisRepository->deleteOrphans($userId, self::ORPHAN_TTL_HOURS);
     }
 
     public function analyze(int $userId, array $uploadIds): array

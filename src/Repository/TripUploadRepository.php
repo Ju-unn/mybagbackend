@@ -59,4 +59,28 @@ class TripUploadRepository
         $this->pdo->prepare("UPDATE trip_uploads SET trip_id = ? WHERE upload_id IN ({$placeholders})")
             ->execute([$tripId, ...$uploadIds]);
     }
+
+    // 방 생성까지 안 가고 이탈해 trip_id가 계속 NULL로 남은 본인 소유 고아 업로드 조회
+    // (upload.php가 호출될 때마다 자기 몫만 청소 — idx_uploader_created 인덱스 사용)
+    public function findOrphans(int $uploaderUserId, int $olderThanHours): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT upload_id, file_path FROM trip_uploads
+             WHERE uploader_user_id = ? AND trip_id IS NULL AND created_at < (NOW() - INTERVAL ? HOUR)'
+        );
+        $stmt->execute([$uploaderUserId, $olderThanHours]);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function deleteByIds(array $uploadIds): void
+    {
+        if ($uploadIds === []) {
+            return;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($uploadIds), '?'));
+        $this->pdo->prepare("DELETE FROM trip_uploads WHERE upload_id IN ({$placeholders})")
+            ->execute($uploadIds);
+    }
 }

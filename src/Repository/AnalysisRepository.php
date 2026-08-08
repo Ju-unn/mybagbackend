@@ -72,4 +72,13 @@ class AnalysisRepository
         $this->pdo->prepare('UPDATE ai_analyses SET trip_id = ? WHERE analysis_id = ?')
             ->execute([$tripId, $analysisId]);
     }
+
+    // 방 생성까지 안 가고 이탈해 trip_id가 계속 NULL로 남은 본인 소유 고아 분석 결과 삭제
+    public function deleteOrphans(int $userId, int $olderThanHours): void
+    {
+        $this->pdo->prepare(
+            'DELETE FROM ai_analyses
+             WHERE requested_by_user_id = ? AND trip_id IS NULL AND created_at < (NOW() - INTERVAL ? HOUR)'
+        )->execute([$userId, $olderThanHours]);
+    }
 }
