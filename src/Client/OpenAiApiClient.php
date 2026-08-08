@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Client;
 
+use App\Support\DangerousGoodsCatalog;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use RuntimeException;
@@ -58,62 +59,63 @@ class OpenAiApiClient
    - 날짜에 연도가 안 적혀 있으면(예: "8월 28일"만 있고 연도 없음), 위 "오늘 날짜" 기준으로 현재연도를 선택하세요. 연도를 모른다는 이유로 null을 반환하지 마세요 — 반드시 연도를 추론해서 YYYY-MM-DD로 채우세요.
     12월에 다음 해 1월 여행 캡처엔 현재연도에서 +1 해서 다음년도로 계산할것
 3. 위에서 정리한 여행 정보를 기반으로 짐 준비물을 추천해 주세요.
-4. restricted_items·recommended_items 초안을 작성한 뒤, 목적지 국가의 반입 규정과 계절·날씨·여행 목적(숙소 예약 여부, 이동수단 등)을 다시 한번 점검해서 빠뜨린 품목이 없는지 2차 검증하세요. 누락된 품목은 추가하고, 중복되거나 목적지와 안 맞는 품목은 제거한 최종 목록만 응답하세요.
+4. recommended_items 초안을 작성한 뒤, 목적지 국가의 계절·날씨·여행 목적(숙소 예약 여부, 이동수단 등)을 다시 한번 점검해서 빠뜨린 품목이 없는지 2차 검증하세요. 누락된 품목은 추가하고, 중복되거나 목적지와 안 맞는 품목은 제거한 최종 목록만 응답하세요.
 
 각 필드 작성 기준:
 - destination_country/city: 1~2번에서 확정한 목적지 국가·도시명 (city는 OpenWeatherMap 지오코딩에 쓰일 영문/한글 도시명)
 - start_date/end_date: 1~2번에서 확정한 여행 시작·종료 날짜 (YYYY-MM-DD, 연도 없으면 위 규칙대로 추론)
 - is_overseas: 항공권 등 이동수단 근거로 국내/해외 여행인지 판단
-- restricted_items: 목적지 기준 기내 반입 제한이 있는 품목만 (보조배터리, 액체류 등). 없으면 빈 배열
-- recommended_items: 목적지 날씨·여행지 특성을 고려한 준비물 10~20개, 중요도별로 분류
+- restricted_items: 아래 "반입규정 카탈로그" 중 이 여행에 실제로 해당할 만한 항목의 key만 골라 배열로 반환하세요. item_name·restriction_type·reason은 절대 직접 작성하지 말고, 이 목록에 없는 품목은 임의로 만들어내지 마세요. 해당하는 게 없으면 빈 배열.
+- recommended_items: 목적지 날씨·여행지 특성을 고려한 준비물 10~20개, 중요도별로 분류. restricted_items에서 이미 고른 카탈로그 품목(보조배터리, 라이터 등)은 여기 다시 넣지 마세요. is_overseas가 false(국내 여행)면 여권·환전·해외 어댑터 등 해외 전용 품목은 절대 넣지 마세요.
 날짜·도시 외의 필드(숙소명 등)는 이미지에 정보가 아예 없으면 null로 두세요. 추측으로 지어내지 마세요.
+
+반입규정 카탈로그 (key: 품목명 (판정) — 설명):
+{{CATALOG}}
 TXT;
 
-    private const SCHEMA = [
-        'type' => 'object',
-        'properties' => [
-            'destination_country' => ['type' => ['string', 'null']],
-            'destination_city' => ['type' => ['string', 'null']],
-            'start_date' => ['type' => ['string', 'null'], 'description' => 'YYYY-MM-DD'],
-            'end_date' => ['type' => ['string', 'null'], 'description' => 'YYYY-MM-DD'],
-            'is_overseas' => ['type' => ['boolean', 'null']],
-            'transport_mode' => ['type' => ['string', 'null'], 'enum' => ['AIR', 'OTHER', null]],
-            'accommodation_name' => ['type' => ['string', 'null']],
-            'restricted_items' => [
-                'type' => 'array',
-                'items' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'item_name' => ['type' => 'string'],
-                        'restriction_type' => ['type' => 'string', 'enum' => ['PROHIBITED', 'CARRY_ON_ONLY', 'CHECKED_ONLY', 'LIMITED', 'CAUTION']],
-                        'reason' => ['type' => 'string'],
+    // DangerousGoodsCatalog::keys()는 상수식이 아니라 메서드 호출이라 class const로 못 두고 static 메서드로 조립
+    private static function schema(): array
+    {
+        return [
+            'type' => 'object',
+            'properties' => [
+                'destination_country' => ['type' => ['string', 'null']],
+                'destination_city' => ['type' => ['string', 'null']],
+                'start_date' => ['type' => ['string', 'null'], 'description' => 'YYYY-MM-DD'],
+                'end_date' => ['type' => ['string', 'null'], 'description' => 'YYYY-MM-DD'],
+                'is_overseas' => ['type' => ['boolean', 'null']],
+                'transport_mode' => ['type' => ['string', 'null'], 'enum' => ['AIR', 'OTHER', null]],
+                'accommodation_name' => ['type' => ['string', 'null']],
+                'restricted_items' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string', 'enum' => DangerousGoodsCatalog::keys()],
+                ],
+                'recommended_items' => [
+                    'type' => 'array',
+                    'items' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'item_name' => ['type' => 'string'],
+                            'category' => ['type' => 'string'],
+                            'priority' => ['type' => 'string', 'enum' => ['REQUIRED', 'RECOMMENDED', 'OPTIONAL']],
+                        ],
+                        'required' => ['item_name', 'category', 'priority'],
+                        'additionalProperties' => false,
                     ],
-                    'required' => ['item_name', 'restriction_type', 'reason'],
-                    'additionalProperties' => false,
                 ],
             ],
-            'recommended_items' => [
-                'type' => 'array',
-                'items' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'item_name' => ['type' => 'string'],
-                        'category' => ['type' => 'string'],
-                        'priority' => ['type' => 'string', 'enum' => ['REQUIRED', 'RECOMMENDED', 'OPTIONAL']],
-                    ],
-                    'required' => ['item_name', 'category', 'priority'],
-                    'additionalProperties' => false,
-                ],
-            ],
-        ],
-        'required' => ['destination_country', 'destination_city', 'start_date', 'end_date', 'is_overseas', 'transport_mode', 'accommodation_name', 'restricted_items', 'recommended_items'],
-        'additionalProperties' => false,
-    ];
+            'required' => ['destination_country', 'destination_city', 'start_date', 'end_date', 'is_overseas', 'transport_mode', 'accommodation_name', 'restricted_items', 'recommended_items'],
+            'additionalProperties' => false,
+        ];
+    }
 
     // $images: [{data: base64, mime: 'image/jpeg'}, ...]. 반환값은 SCHEMA 형태의 연관 배열
     public function analyzeItinerary(array $images): array
     {
-        $prompt = str_replace('{{TODAY}}', date('Y-m-d'), self::PROMPT);
+        $prompt = strtr(self::PROMPT, [
+            '{{TODAY}}' => date('Y-m-d'),
+            '{{CATALOG}}' => DangerousGoodsCatalog::promptSummary(),
+        ]);
         $content = [['type' => 'input_text', 'text' => $prompt]];
         foreach ($images as $image) {
             $content[] = [
@@ -134,7 +136,7 @@ TXT;
                         'format' => [
                             'type' => 'json_schema',
                             'name' => 'itinerary_analysis',
-                            'schema' => self::SCHEMA,
+                            'schema' => self::schema(),
                             'strict' => true,
                         ],
                     ],
@@ -152,7 +154,10 @@ TXT;
             throw new RuntimeException('OpenAI 응답에서 결과 텍스트를 찾지 못했습니다: ' . json_encode($data));
         }
 
-        return json_decode($text, true) ?? [];
+        $result = json_decode($text, true) ?? [];
+        $result['restricted_items'] = DangerousGoodsCatalog::resolve($result['restricted_items'] ?? [], $result['destination_country'] ?? null, $result['transport_mode'] ?? null, $result['is_overseas'] ?? null);
+
+        return $result;
     }
 
     private const FEEDBACK_PROMPT = <<<'TXT'
@@ -229,45 +234,42 @@ TXT;
 이동수단: {{TRANSPORT}}
 
 위 여행 정보는 사용자가 S07 화면에서 직접 확인·수정한 값입니다. 이 값을 기준으로 아래 두 가지를 다시 산출하세요.
-- restricted_items: 목적지 기준 기내 반입 제한이 있는 품목만 (보조배터리, 액체류 등). 없으면 빈 배열
-- recommended_items: 목적지 날씨·여행지 특성을 고려한 준비물 10~20개, 중요도별로 분류
+- restricted_items: 아래 "반입규정 카탈로그" 중 이 여행에 실제로 해당할 만한 항목의 key만 골라 배열로 반환하세요. item_name·restriction_type·reason은 절대 직접 작성하지 말고, 이 목록에 없는 품목은 임의로 만들어내지 마세요. 해당하는 게 없으면 빈 배열.
+- recommended_items: 목적지 날씨·여행지 특성을 고려한 준비물 10~20개, 중요도별로 분류. restricted_items에서 이미 고른 카탈로그 품목(보조배터리, 라이터 등)은 여기 다시 넣지 마세요. 해외 여행 여부가 false(국내 여행)면 여권·환전·해외 어댑터 등 해외 전용 품목은 절대 넣지 마세요.
 
-초안을 작성한 뒤, 새로 확정된 목적지 국가의 반입 규정과 계절·날씨·여행 목적을 다시 한번 점검해서 빠뜨린 품목이 없는지 2차 검증하세요. 누락된 품목은 추가하고, 중복되거나 목적지와 안 맞는 품목은 제거한 최종 목록만 응답하세요.
+초안을 작성한 뒤, 새로 확정된 목적지 국가의 계절·날씨·여행 목적을 다시 한번 점검해서 빠뜨린 품목이 없는지 2차 검증하세요. 누락된 품목은 추가하고, 중복되거나 목적지와 안 맞는 품목은 제거한 최종 목록만 응답하세요.
+
+반입규정 카탈로그 (key: 품목명 (판정) — 설명):
+{{CATALOG}}
 TXT;
 
-    private const REANALYZE_SCHEMA = [
-        'type' => 'object',
-        'properties' => [
-            'restricted_items' => [
-                'type' => 'array',
-                'items' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'item_name' => ['type' => 'string'],
-                        'restriction_type' => ['type' => 'string', 'enum' => ['PROHIBITED', 'CARRY_ON_ONLY', 'CHECKED_ONLY', 'LIMITED', 'CAUTION']],
-                        'reason' => ['type' => 'string'],
+    private static function reanalyzeSchema(): array
+    {
+        return [
+            'type' => 'object',
+            'properties' => [
+                'restricted_items' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string', 'enum' => DangerousGoodsCatalog::keys()],
+                ],
+                'recommended_items' => [
+                    'type' => 'array',
+                    'items' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'item_name' => ['type' => 'string'],
+                            'category' => ['type' => 'string'],
+                            'priority' => ['type' => 'string', 'enum' => ['REQUIRED', 'RECOMMENDED', 'OPTIONAL']],
+                        ],
+                        'required' => ['item_name', 'category', 'priority'],
+                        'additionalProperties' => false,
                     ],
-                    'required' => ['item_name', 'restriction_type', 'reason'],
-                    'additionalProperties' => false,
                 ],
             ],
-            'recommended_items' => [
-                'type' => 'array',
-                'items' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'item_name' => ['type' => 'string'],
-                        'category' => ['type' => 'string'],
-                        'priority' => ['type' => 'string', 'enum' => ['REQUIRED', 'RECOMMENDED', 'OPTIONAL']],
-                    ],
-                    'required' => ['item_name', 'category', 'priority'],
-                    'additionalProperties' => false,
-                ],
-            ],
-        ],
-        'required' => ['restricted_items', 'recommended_items'],
-        'additionalProperties' => false,
-    ];
+            'required' => ['restricted_items', 'recommended_items'],
+            'additionalProperties' => false,
+        ];
+    }
 
     // S07에서 목적지/기간이 수정된 경우 confirm()이 호출. 사진 없이 텍스트만으로 반입규정·추천준비물을 재산출
     public function reanalyzeRestrictionsAndItems(array $fields): array
@@ -279,6 +281,7 @@ TXT;
             '{{END}}' => (string) ($fields['end_date'] ?? ''),
             '{{IS_OVERSEAS}}' => !empty($fields['is_overseas']) ? '예' : '아니오',
             '{{TRANSPORT}}' => (string) ($fields['transport_mode'] ?? ''),
+            '{{CATALOG}}' => DangerousGoodsCatalog::promptSummary(),
         ]);
 
         $client = new Client(['timeout' => $this->timeout]);
@@ -293,7 +296,7 @@ TXT;
                         'format' => [
                             'type' => 'json_schema',
                             'name' => 'itinerary_reanalysis',
-                            'schema' => self::REANALYZE_SCHEMA,
+                            'schema' => self::reanalyzeSchema(),
                             'strict' => true,
                         ],
                     ],
@@ -311,6 +314,9 @@ TXT;
             throw new RuntimeException('OpenAI 응답에서 결과 텍스트를 찾지 못했습니다: ' . json_encode($data));
         }
 
-        return json_decode($text, true) ?? [];
+        $result = json_decode($text, true) ?? [];
+        $result['restricted_items'] = DangerousGoodsCatalog::resolve($result['restricted_items'] ?? [], $fields['destination_country'] ?? null, $fields['transport_mode'] ?? null, $fields['is_overseas'] ?? null);
+
+        return $result;
     }
 }

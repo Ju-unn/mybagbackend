@@ -2,7 +2,7 @@
 
 여행 준비물 공유 앱 **MyBag** 백엔드 API 문서.
 
-- **Base URL**: `http://13.124.218.86`
+- **Base URL**: `https://mybag.duckdns.org`
 - **인증**: `카카오 로그인` 을 제외한 모든 API는 헤더에 JWT 필요
   ```
   Authorization: Bearer {token}
