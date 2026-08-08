@@ -14,13 +14,15 @@ use RuntimeException;
 class ItineraryService
 {
     // S07 ScheduleConfirmActivity에서 '수정' 텍스트 버튼으로 인라인 수정 가능한 필드만 (README 4-3 섹션)
+    // 이 중 하나라도 실제로 바뀌면 반입규정·추천준비물이 더 이상 안 맞을 수 있어 재분석이 필요함
     private const EDITABLE_FIELDS = [
         'destination_country', 'destination_city', 'start_date', 'end_date',
         'transport_mode', 'accommodation_name',
     ];
 
-    // 이 중 하나라도 바뀌면 반입규정·추천준비물이 더 이상 안 맞을 수 있어 재분석이 필요함
-    private const CORE_FIELDS = ['destination_country', 'destination_city', 'start_date', 'end_date'];
+    // S07 이동수단 수정은 자유 텍스트 입력이지만, DangerousGoodsCatalog가 transport_mode==='AIR'
+    // 정확 비교로 항공 전용 반입규정을 강제 포함시키므로 저장값은 항상 AIR/OTHER 코드값으로 고정한다.
+    private const AIR_KEYWORDS = '/항공|비행기|플레인|비행|air|flight/iu';
 
     // 방 생성까지 안 가고 이탈한 고아 업로드/분석을 이 시간이 지나면 청소 대상으로 봄
     private const ORPHAN_TTL_HOURS = 24;
@@ -82,8 +84,8 @@ class ItineraryService
     }
 
     // $fields: EDITABLE_FIELDS 중 사용자가 고친 것만 담아 전달 (미포함 필드는 기존 값 유지)
-    // CORE_FIELDS(목적지·기간)가 실제로 바뀐 경우, 그 값 그대로 저장하지 않고 GPT를 재호출해
-    // restricted_items/recommended_items를 새 목적지 기준으로 갱신한 뒤 저장한다.
+    // EDITABLE_FIELDS 중 하나라도 실제로 바뀐 경우, 그 값 그대로 저장하지 않고 GPT를 재호출해
+    // restricted_items/recommended_items를 수정된 필드 기준으로 갱신한 뒤 저장한다.
     public function confirm(int $userId, int $analysisId, array $fields): array
     {
         $result = $this->analysisRepository->findResultById($analysisId, $userId);
@@ -91,14 +93,16 @@ class ItineraryService
             throw new RuntimeException('본인이 요청한 분석만 확정할 수 있습니다.');
         }
 
-        $coreChanged = false;
+        if (array_key_exists('transport_mode', $fields)) {
+            $fields['transport_mode'] = self::normalizeTransportMode($fields['transport_mode']);
+        }
+
+        $changed = false;
         foreach (self::EDITABLE_FIELDS as $field) {
             if (!array_key_exists($field, $fields) || $fields[$field] === $result[$field]) {
                 continue;
             }
-            if (in_array($field, self::CORE_FIELDS, true)) {
-                $coreChanged = true;
-            }
+            $changed = true;
             $result[$field] = $fields[$field];
         }
 
@@ -108,7 +112,7 @@ class ItineraryService
             $result['is_overseas'] = !self::isDomesticCountry($result['destination_country'] ?? '');
         }
 
-        if ($coreChanged) {
+        if ($changed) {
             $fresh = $this->openAi->reanalyzeRestrictionsAndItems($result);
             $result['restricted_items'] = $fresh['restricted_items'] ?? [];
             $result['recommended_items'] = $fresh['recommended_items'] ?? [];
@@ -117,6 +121,11 @@ class ItineraryService
         $this->analysisRepository->updateResult($analysisId, $result);
 
         return ['analysis_id' => $analysisId] + $result;
+    }
+
+    private static function normalizeTransportMode(?string $value): string
+    {
+        return $value !== null && preg_match(self::AIR_KEYWORDS, $value) === 1 ? 'AIR' : 'OTHER';
     }
 
     private static function isDomesticCountry(string $country): bool
