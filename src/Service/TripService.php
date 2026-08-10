@@ -114,7 +114,13 @@ class TripService
             throw new RuntimeException('존재하지 않는 여행방입니다.');
         }
 
-        return ['trip' => $trip, 'members' => $this->memberRepository->findByTripId($tripId)];
+        $invite = $this->inviteRepository->findActiveByTripId($tripId);
+
+        return [
+            'trip' => $trip,
+            'members' => $this->memberRepository->findByTripId($tripId),
+            'invite_code' => $invite['invite_code'] ?? null,
+        ];
     }
 
     public function listMembers(int $tripId): array

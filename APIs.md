@@ -221,10 +221,12 @@ JWT는 stateless라 서버 측 블랙리스트는 없음 — 클라이언트가 
         "nickname": "홍길동",
         "profile_image_url": "https://..."
       }
-    ]
+    ],
+    "invite_code": "A1B2C3D4"
   }
 }
 ```
+`invite_code`는 `trip` 객체가 아니라 `data` 최상위에 옵니다(`trips` 테이블 컬럼이 아니라 `trip_invites` 테이블에서 조회하는 값이라서). 활성 초대 코드가 없으면 `null`.
 
 | 상태코드 | 상황 |
 |:--:|:--|
@@ -280,6 +282,14 @@ JWT는 stateless라 서버 측 블랙리스트는 없음 — 클라이언트가 
 | 상태코드 | 상황 |
 |:--:|:--|
 |400|`invite_code` 누락, 유효하지 않은/만료된/횟수 초과된 코드, 이미 참여 중|
+
+---
+
+### <span style="color: #61affe;">**GET**</span> 초대 랜딩 페이지 (JSON API 아님)
+```
+/invite/{code}
+```
+카카오톡 공유·"링크 복사"로 배포되는 `https://mybag.duckdns.org/invite/{code}` URL이 실제로 여는 HTML 페이지. 안드로이드 App Link(`autoVerify`, `assetlinks.json`)가 앱을 직접 열지 못했을 때(미설치/인증 실패/PC 브라우저)만 노출됨 — 코드 유효성만 보여주고 `intent://` 링크로 앱 실행을 유도. `join.php` 호출은 여전히 앱(`InviteJoinActivity`)이 함, 이 페이지는 폴백 UI일 뿐.
 
 ---
 
