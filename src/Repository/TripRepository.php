@@ -22,13 +22,14 @@ class TripRepository
         ?string $destinationCountry,
         ?string $destinationCity,
         ?string $startDate,
-        ?string $endDate
+        ?string $endDate,
+        ?string $nearestKrCity = null
     ): int {
         $stmt = $this->pdo->prepare(
-            "INSERT INTO trips (owner_user_id, trip_name, expected_member_count, trip_type, destination_country, destination_city, start_date, end_date, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'CREATED')"
+            "INSERT INTO trips (owner_user_id, trip_name, expected_member_count, trip_type, destination_country, destination_city, start_date, end_date, nearest_kr_city, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'CREATED')"
         );
-        $stmt->execute([$ownerUserId, $tripName, $expectedMemberCount, $tripType, $destinationCountry, $destinationCity, $startDate, $endDate]);
+        $stmt->execute([$ownerUserId, $tripName, $expectedMemberCount, $tripType, $destinationCountry, $destinationCity, $startDate, $endDate, $nearestKrCity]);
 
         return (int) $this->pdo->lastInsertId();
     }

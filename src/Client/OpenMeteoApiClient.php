@@ -31,13 +31,43 @@ class OpenMeteoApiClient
         '남해' => [34.8375, 127.8926], '하동' => [35.0670, 127.7514],
     ];
 
-    // 도시명으로 위경도 조회. 국내 표에 있으면 그걸 쓰고, 없으면 Open-Meteo 검색. 둘 다 실패하면 예외
-    public function geocode(string $city): array
+    // 행정구역 접미사(긴 것부터) — "제주도"/"서울특별시"/"경주시"처럼 표기만 다른 경우 접미사를 떼면 표에 그대로 걸림
+    private const KR_SUFFIXES = ['특별자치시', '특별자치도', '광역시', '특별시', '자치시', '자치도', '시', '군', '구', '도'];
+
+    // OpenAiApiClient가 "이 중 가장 가까운 도시를 골라라" 프롬프트에 쓸 목록 — 표 자체가 유일한 출처
+    public static function krCityNames(): array
     {
+        return array_keys(self::KR_CITY_COORDS);
+    }
+
+    // 도시명으로 위경도 조회. $krCityHint(GPT가 고른 "40개 중 가장 가까운 도시")가 표에 있으면 최우선 사용 —
+    // destination_city 원문이 표·접미사 매칭 둘 다 실패하는 소도시(나주 등)를 위한 마지막 보정.
+    // 힌트가 없거나 표 밖 값이면 기존 방식(국내 표 → 접미사 제거 재시도 → Open-Meteo)으로 처리. 둘 다 실패하면 예외
+    public function geocode(string $city, ?string $krCityHint = null): array
+    {
+        if ($krCityHint !== null && isset(self::KR_CITY_COORDS[$krCityHint])) {
+            [$lat, $lon] = self::KR_CITY_COORDS[$krCityHint];
+            return ['lat' => $lat, 'lon' => $lon, 'name' => $krCityHint];
+        }
+
         $normalized = trim($city);
-        if (isset(self::KR_CITY_COORDS[$normalized])) {
-            [$lat, $lon] = self::KR_CITY_COORDS[$normalized];
-            return ['lat' => $lat, 'lon' => $lon, 'name' => $normalized];
+        $coords = self::KR_CITY_COORDS[$normalized] ?? null;
+
+        if ($coords === null) {
+            foreach (self::KR_SUFFIXES as $suffix) {
+                if (str_ends_with($normalized, $suffix)) {
+                    $stripped = mb_substr($normalized, 0, mb_strlen($normalized) - mb_strlen($suffix));
+                    if (isset(self::KR_CITY_COORDS[$stripped])) {
+                        $coords = self::KR_CITY_COORDS[$stripped];
+                        $normalized = $stripped;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if ($coords !== null) {
+            return ['lat' => $coords[0], 'lon' => $coords[1], 'name' => $normalized];
         }
 
         $client = new Client(['timeout' => 10]);

@@ -34,7 +34,9 @@ class WeatherService
     ) {
     }
 
-    public function getForecast(string $city, string $startDate, string $endDate): array
+    // $krCityHint: GPT가 분석 시점에 고른 "국내 40개 도시 중 가장 가까운 곳"(destination_city가 표·접미사 매칭 둘 다
+    // 실패하는 소도시일 때의 최종 보정, trips.nearest_kr_city). 해외 여행이거나 없으면 null — 기존 방식 그대로 동작
+    public function getForecast(string $city, string $startDate, string $endDate, ?string $krCityHint = null): array
     {
         $cacheKey = "weather:{$city}:{$startDate}:{$endDate}";
         $cached = $this->cache->get($cacheKey);
@@ -42,7 +44,7 @@ class WeatherService
             return $cached;
         }
 
-        $location = $this->geocodeClient->geocode($city);
+        $location = $this->geocodeClient->geocode($city, $krCityHint);
         $start = new DateTimeImmutable($startDate, new DateTimeZone('UTC'));
 
         $daily = $this->forecastClient->dailyForecast($location['lat'], $location['lon'], $start->getTimestamp());
@@ -75,7 +77,7 @@ class WeatherService
     {
         $trip = $this->requireConfirmedTrip($tripId);
 
-        $forecast = $this->getForecast($trip['destination_city'], $trip['start_date'], $trip['end_date']);
+        $forecast = $this->getForecast($trip['destination_city'], $trip['start_date'], $trip['end_date'], $trip['nearest_kr_city'] ?? null);
         $this->cache->put("trip_weather:{$tripId}", $forecast, self::TRIP_CACHE_TTL_SECONDS);
 
         $feedback = $this->aiClient->generateWeatherFeedback($trip, $forecast['days']);

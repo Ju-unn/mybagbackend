@@ -55,7 +55,8 @@ class TripService
                 $result['destination_country'] ?? null,
                 $result['destination_city'] ?? null,
                 $result['start_date'] ?? null,
-                $result['end_date'] ?? null
+                $result['end_date'] ?? null,
+                $result['nearest_kr_city'] ?? null
             );
             $this->memberRepository->addOwner($tripId, $ownerUserId);
             $this->analysisRepository->attachToTrip($analysisId, $tripId);

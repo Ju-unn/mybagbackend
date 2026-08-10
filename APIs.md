@@ -389,6 +389,7 @@ JWT는 stateless라 서버 측 블랙리스트는 없음 — 클라이언트가 
     "start_date": "2026-09-10",
     "end_date": "2026-09-13",
     "is_overseas": true,
+    "nearest_kr_city": null,
     "transport_mode": null,
     "accommodation_name": null,
     "restricted_items": [
@@ -400,6 +401,7 @@ JWT는 stateless라 서버 측 블랙리스트는 없음 — 클라이언트가 
   }
 }
 ```
+`nearest_kr_city`는 클라이언트가 쓸 필드 아님(날씨 조회 내부용) — `is_overseas:false`(국내 여행)면 서버가 관리하는 40개 도시 목록 중 GPT가 고른 가장 가까운 도시명, 해외 여행이면 항상 `null`.
 
 | 상태코드 | 상황 |
 |:--:|:--|

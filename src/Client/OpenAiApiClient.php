@@ -65,9 +65,13 @@ class OpenAiApiClient
 - destination_country/city: 1~2번에서 확정한 목적지 국가·도시명 (city는 OpenWeatherMap 지오코딩에 쓰일 영문/한글 도시명)
 - start_date/end_date: 1~2번에서 확정한 여행 시작·종료 날짜 (YYYY-MM-DD, 연도 없으면 위 규칙대로 추론)
 - is_overseas: 항공권 등 이동수단 근거로 국내/해외 여행인지 판단
+- nearest_kr_city: is_overseas가 false(국내 여행)면, 아래 "국내 날씨 조회 가능 도시" 목록 중 이 여행 목적지와 지리적으로 가장 가까운 도시를 목록에 있는 표기 그대로 정확히 골라 반환하세요(날씨 조회용 — 목록에 없는 이름을 새로 만들지 마세요). is_overseas가 true(해외 여행)면 null.
 - restricted_items: 아래 "반입규정 카탈로그" 중 이 여행에 실제로 해당할 만한 항목의 key만 골라 배열로 반환하세요. item_name·restriction_type·reason은 절대 직접 작성하지 말고, 이 목록에 없는 품목은 임의로 만들어내지 마세요. 해당하는 게 없으면 빈 배열.
 - recommended_items: 목적지 날씨·여행지 특성을 고려한 준비물 10~20개, 중요도별로 분류. restricted_items에서 이미 고른 카탈로그 품목(보조배터리, 라이터 등)은 여기 다시 넣지 마세요. is_overseas가 false(국내 여행)면 여권·환전·해외 어댑터 등 해외 전용 품목은 절대 넣지 마세요.
 날짜·도시 외의 필드(숙소명 등)는 이미지에 정보가 아예 없으면 null로 두세요. 추측으로 지어내지 마세요.
+
+국내 날씨 조회 가능 도시 (nearest_kr_city 후보, 이 중 하나 또는 null만 가능):
+{{KR_CITIES}}
 
 반입규정 카탈로그 (key: 품목명 (판정) — 설명):
 {{CATALOG}}
@@ -84,6 +88,7 @@ TXT;
                 'start_date' => ['type' => ['string', 'null'], 'description' => 'YYYY-MM-DD'],
                 'end_date' => ['type' => ['string', 'null'], 'description' => 'YYYY-MM-DD'],
                 'is_overseas' => ['type' => ['boolean', 'null']],
+                'nearest_kr_city' => ['type' => ['string', 'null'], 'enum' => [...OpenMeteoApiClient::krCityNames(), null]],
                 'transport_mode' => ['type' => ['string', 'null'], 'enum' => ['AIR', 'OTHER', null]],
                 'accommodation_name' => ['type' => ['string', 'null']],
                 'restricted_items' => [
@@ -104,7 +109,7 @@ TXT;
                     ],
                 ],
             ],
-            'required' => ['destination_country', 'destination_city', 'start_date', 'end_date', 'is_overseas', 'transport_mode', 'accommodation_name', 'restricted_items', 'recommended_items'],
+            'required' => ['destination_country', 'destination_city', 'start_date', 'end_date', 'is_overseas', 'nearest_kr_city', 'transport_mode', 'accommodation_name', 'restricted_items', 'recommended_items'],
             'additionalProperties' => false,
         ];
     }
@@ -114,6 +119,7 @@ TXT;
     {
         $prompt = strtr(self::PROMPT, [
             '{{TODAY}}' => date('Y-m-d'),
+            '{{KR_CITIES}}' => implode(', ', OpenMeteoApiClient::krCityNames()),
             '{{CATALOG}}' => DangerousGoodsCatalog::promptSummary(),
         ]);
         $content = [['type' => 'input_text', 'text' => $prompt]];
@@ -233,11 +239,15 @@ TXT;
 해외 여행 여부: {{IS_OVERSEAS}}
 이동수단: {{TRANSPORT}}
 
-위 여행 정보는 사용자가 S07 화면에서 직접 확인·수정한 값입니다. 이 값을 기준으로 아래 두 가지를 다시 산출하세요.
+위 여행 정보는 사용자가 S07 화면에서 직접 확인·수정한 값입니다. 이 값을 기준으로 아래 세 가지를 다시 산출하세요.
 - restricted_items: 아래 "반입규정 카탈로그" 중 이 여행에 실제로 해당할 만한 항목의 key만 골라 배열로 반환하세요. item_name·restriction_type·reason은 절대 직접 작성하지 말고, 이 목록에 없는 품목은 임의로 만들어내지 마세요. 해당하는 게 없으면 빈 배열.
 - recommended_items: 목적지 날씨·여행지 특성을 고려한 준비물 10~20개, 중요도별로 분류. restricted_items에서 이미 고른 카탈로그 품목(보조배터리, 라이터 등)은 여기 다시 넣지 마세요. 해외 여행 여부가 false(국내 여행)면 여권·환전·해외 어댑터 등 해외 전용 품목은 절대 넣지 마세요.
+- nearest_kr_city: 해외 여행 여부가 false(국내 여행)면, 아래 "국내 날씨 조회 가능 도시" 목록 중 새로 확정된 목적지와 지리적으로 가장 가까운 도시를 목록에 있는 표기 그대로 정확히 골라 반환하세요. 해외 여행 여부가 true(해외 여행)면 null.
 
 초안을 작성한 뒤, 새로 확정된 목적지 국가의 계절·날씨·여행 목적을 다시 한번 점검해서 빠뜨린 품목이 없는지 2차 검증하세요. 누락된 품목은 추가하고, 중복되거나 목적지와 안 맞는 품목은 제거한 최종 목록만 응답하세요.
+
+국내 날씨 조회 가능 도시 (nearest_kr_city 후보, 이 중 하나 또는 null만 가능):
+{{KR_CITIES}}
 
 반입규정 카탈로그 (key: 품목명 (판정) — 설명):
 {{CATALOG}}
@@ -265,8 +275,9 @@ TXT;
                         'additionalProperties' => false,
                     ],
                 ],
+                'nearest_kr_city' => ['type' => ['string', 'null'], 'enum' => [...OpenMeteoApiClient::krCityNames(), null]],
             ],
-            'required' => ['restricted_items', 'recommended_items'],
+            'required' => ['restricted_items', 'recommended_items', 'nearest_kr_city'],
             'additionalProperties' => false,
         ];
     }
@@ -281,6 +292,7 @@ TXT;
             '{{END}}' => (string) ($fields['end_date'] ?? ''),
             '{{IS_OVERSEAS}}' => !empty($fields['is_overseas']) ? '예' : '아니오',
             '{{TRANSPORT}}' => (string) ($fields['transport_mode'] ?? ''),
+            '{{KR_CITIES}}' => implode(', ', OpenMeteoApiClient::krCityNames()),
             '{{CATALOG}}' => DangerousGoodsCatalog::promptSummary(),
         ]);
 

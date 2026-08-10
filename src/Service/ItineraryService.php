@@ -116,6 +116,7 @@ class ItineraryService
             $fresh = $this->openAi->reanalyzeRestrictionsAndItems($result);
             $result['restricted_items'] = $fresh['restricted_items'] ?? [];
             $result['recommended_items'] = $fresh['recommended_items'] ?? [];
+            $result['nearest_kr_city'] = $fresh['nearest_kr_city'] ?? null;
         }
 
         $this->analysisRepository->updateResult($analysisId, $result);
