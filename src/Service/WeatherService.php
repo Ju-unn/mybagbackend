@@ -38,7 +38,7 @@ class WeatherService
     // 실패하는 소도시일 때의 최종 보정, trips.nearest_kr_city). 해외 여행이거나 없으면 null — 기존 방식 그대로 동작
     public function getForecast(string $city, string $startDate, string $endDate, ?string $krCityHint = null): array
     {
-        $cacheKey = "weather:{$city}:{$startDate}:{$endDate}";
+        $cacheKey = "weather:{$city}:{$krCityHint}:{$startDate}:{$endDate}";
         $cached = $this->cache->get($cacheKey);
         if ($cached !== null) {
             return $cached;
