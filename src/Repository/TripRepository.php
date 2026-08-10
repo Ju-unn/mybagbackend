@@ -68,6 +68,12 @@ class TripRepository
             ->execute([$status, $tripId]);
     }
 
+    // 방 삭제(방장 전용) — trip_members/trip_invites/packing_items/ai_analyses는 FK ON DELETE CASCADE로 같이 삭제됨
+    public function delete(int $tripId): void
+    {
+        $this->pdo->prepare('DELETE FROM trips WHERE trip_id = ?')->execute([$tripId]);
+    }
+
     // 날씨 체크포인트 배치(WeatherRefreshService)용 — 오늘 기준 출발일이 정확히 $daysList 중 하나만큼 남은 trip_id 목록
     public function findStartingInDays(array $daysList): array
     {

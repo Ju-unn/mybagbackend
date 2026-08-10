@@ -7,14 +7,18 @@ require_once __DIR__ . '/../../../bootstrap/app.php';
 use App\Client\OpenAiApiClient;
 use App\Client\OpenMeteoApiClient;
 use App\Client\OpenWeatherApiClient;
+use App\Client\FcmApiClient;
 use App\Controller\TripController;
 use App\Repository\AnalysisRepository;
 use App\Repository\ApiCacheRepository;
 use App\Repository\ChecklistRepository;
+use App\Repository\NotificationLogRepository;
+use App\Repository\NotificationRepository;
 use App\Repository\TripInviteRepository;
 use App\Repository\TripMemberRepository;
 use App\Repository\TripRepository;
 use App\Repository\TripUploadRepository;
+use App\Service\NotificationService;
 use App\Service\TripService;
 use App\Service\WeatherService;
 use App\Support\ApiResponse;
@@ -44,5 +48,7 @@ $controller = new TripController($pdo, new TripService(
         new TripRepository($pdo),
         new OpenAiApiClient($env['OPENAI_API_KEY'], $env['OPENAI_MODEL']),
     ),
+    new NotificationService(new FcmApiClient(), new NotificationRepository($pdo)),
+    new NotificationLogRepository($pdo),
 ));
 $controller->detail();

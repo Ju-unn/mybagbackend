@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Middleware\AuthMiddleware;
 use App\Middleware\TripMemberMiddleware;
+use App\Middleware\TripOwnerMiddleware;
 use App\Service\TripService;
 use App\Support\ApiResponse;
 use PDO;
@@ -119,5 +120,52 @@ class TripController
         }
 
         ApiResponse::send(true, '참여 완료', $result);
+    }
+
+    // POST /api/trips/delete.php (JSON body: {trip_id}) — 방장 전용, 완전 삭제(멤버·초대코드·체크리스트·업로드 파일까지 전부 삭제)
+    public function delete(): void
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            ApiResponse::send(false, 'POST만 허용됩니다.', [], 405);
+        }
+
+        $user = AuthMiddleware::handle();
+        $body = json_decode((string) file_get_contents('php://input'), true) ?? [];
+        $tripId = (int) ($body['trip_id'] ?? 0);
+        if ($tripId === 0) {
+            ApiResponse::send(false, 'trip_id가 필요합니다.', [], 400);
+        }
+        TripOwnerMiddleware::handle($this->pdo, $tripId, $user['id']);
+
+        try {
+            $this->tripService->deleteTrip($tripId, $user['id']);
+        } catch (RuntimeException $e) {
+            ApiResponse::send(false, $e->getMessage(), [], 404);
+        }
+
+        ApiResponse::send(true, '삭제 완료', []);
+    }
+
+    // POST /api/trips/leave.php (JSON body: {trip_id}) — 참여자 본인만 나가기. 방장은 나갈 수 없음(방 삭제를 이용해야 함)
+    public function leave(): void
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            ApiResponse::send(false, 'POST만 허용됩니다.', [], 405);
+        }
+
+        $user = AuthMiddleware::handle();
+        $body = json_decode((string) file_get_contents('php://input'), true) ?? [];
+        $tripId = (int) ($body['trip_id'] ?? 0);
+        if ($tripId === 0) {
+            ApiResponse::send(false, 'trip_id가 필요합니다.', [], 400);
+        }
+        $role = TripMemberMiddleware::handle($this->pdo, $tripId, $user['id']);
+        if ($role === 'OWNER') {
+            ApiResponse::send(false, '방장은 나갈 수 없습니다. 방을 삭제해주세요.', [], 400);
+        }
+
+        $this->tripService->leaveTrip($tripId, $user['id']);
+
+        ApiResponse::send(true, '나가기 완료', []);
     }
 }

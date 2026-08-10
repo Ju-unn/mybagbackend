@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Repository\AnalysisRepository;
 use App\Repository\ChecklistRepository;
+use App\Repository\NotificationLogRepository;
 use App\Repository\TripInviteRepository;
 use App\Repository\TripMemberRepository;
 use App\Repository\TripRepository;
@@ -15,7 +16,7 @@ use PDO;
 use RuntimeException;
 use Throwable;
 
-// 여행방 생성·참여·조회 오케스트레이션
+// 여행방 생성·참여·조회·삭제·나가기 오케스트레이션
 class TripService
 {
     public function __construct(
@@ -28,6 +29,8 @@ class TripService
         private ChecklistRepository $checklistRepository,
         private FileUploader $fileUploader,
         private WeatherService $weatherService,
+        private NotificationService $notificationService,
+        private NotificationLogRepository $notificationLogRepository,
     ) {
     }
 
@@ -134,6 +137,51 @@ class TripService
         $this->inviteRepository->incrementUsedCount((int) $invite['invite_id']);
 
         return ['trip_id' => $tripId];
+    }
+
+    // 방장 전용 완전 삭제(F-신규, 2026-08-10) — 문서상 "실제 DELETE 대신 상태값 변경" 권장을 명시적으로 뒤집은 요청.
+    // trip_members/trip_invites/packing_items/ai_analyses는 FK ON DELETE CASCADE로 자동 정리되지만
+    // notification_log은 CASCADE가 없어 먼저 지워야 하고, trip_uploads 실제 파일은 DB와 별개로 직접 지워야 함.
+    // 멤버 목록·파일 경로는 트립이 사라지기 전에 미리 확보해둔다.
+    public function deleteTrip(int $tripId, int $ownerUserId): void
+    {
+        $trip = $this->tripRepository->findById($tripId);
+        if ($trip === null) {
+            throw new RuntimeException('존재하지 않는 여행방입니다.');
+        }
+
+        $memberIds = array_map('intval', array_column($this->memberRepository->findByTripId($tripId), 'user_id'));
+        $filePaths = $this->uploadRepository->findFilePathsByTripId($tripId);
+
+        $this->pdo->beginTransaction();
+        try {
+            $this->notificationLogRepository->deleteByTripId($tripId);
+            $this->tripRepository->delete($tripId);
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+
+        foreach ($filePaths as $filePath) {
+            $this->fileUploader->delete($filePath);
+        }
+
+        $recipientIds = array_values(array_filter($memberIds, fn (int $id) => $id !== $ownerUserId));
+        $this->notificationService->notifyUsers($recipientIds, [
+            'type' => 'TRIP_DELETED',
+            'trip_id' => (string) $tripId,
+            'trip_name' => (string) $trip['trip_name'],
+        ]);
+    }
+
+    // 팀원 나가기(F-신규, 2026-08-10 — 15번 섹션 G '제외 확정' 결정을 뒤집는 요청) — 본인 참여 상태만 LEFT로 변경,
+    // 트립/다른 멤버 데이터는 그대로 둠. 담당하던 물품은 해제해서 남은 멤버 화면에 나간 사람이 안 보이게 함.
+    // 방장은 나갈 수 없다는 규칙은 컨트롤러가 role로 사전에 막음(TripMemberMiddleware 반환값 이용)
+    public function leaveTrip(int $tripId, int $userId): void
+    {
+        $this->memberRepository->markLeft($tripId, $userId);
+        $this->checklistRepository->unassignByTripAndUser($tripId, $userId);
     }
 
     private function generateInviteCode(): string

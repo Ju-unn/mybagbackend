@@ -282,6 +282,58 @@ JWT는 stateless라 서버 측 블랙리스트는 없음 — 클라이언트가 
 
 ---
 
+### <span style="color: #f93e3e;">**POST**</span> 방 삭제
+```
+/api/trips/delete.php
+```
+**방장 전용.** 소프트 삭제가 아니라 방·멤버·초대코드·체크리스트·일정 업로드까지 전부 되돌릴 수 없게 삭제합니다. 삭제 성공 시 방장을 제외한 남은 멤버 전원에게 `TRIP_DELETED` FCM data 알림이 발송됩니다.
+
+**Body**
+```json
+{ "trip_id": 2 }
+```
+
+**Response**
+```json
+{ "success": true, "message": "삭제 완료", "data": [] }
+```
+
+| 상태코드 | 상황 |
+|:--:|:--|
+|400|`trip_id` 누락|
+|403|방장이 아님|
+|404|존재하지 않는 여행방|
+
+**FCM data 페이로드** (`TRIP_DELETED`)
+```json
+{ "type": "TRIP_DELETED", "trip_id": "2", "trip_name": "오사카 여름 여행" }
+```
+
+---
+
+### <span style="color: #49cc90;">**POST**</span> 방 나가기
+```
+/api/trips/leave.php
+```
+참여자 본인만. **방장은 나갈 수 없음**(방을 삭제해야 함). 나가면 본인의 참여 상태만 `LEFT`로 바뀌고 다른 멤버·방 데이터는 그대로 유지되며, 본인이 담당하던 체크리스트 항목은 담당자가 해제됩니다. 초대코드로 재입장하면 `JOINED`로 복귀합니다.
+
+**Body**
+```json
+{ "trip_id": 2 }
+```
+
+**Response**
+```json
+{ "success": true, "message": "나가기 완료", "data": [] }
+```
+
+| 상태코드 | 상황 |
+|:--:|:--|
+|400|`trip_id` 누락, 방장이 나가려 함(방을 삭제해야 함 안내)|
+|403|참여자가 아님|
+
+---
+
 ## Itinerary (일정 업로드·분석)
 
 ### <span style="color: #49cc90;">**POST**</span> 사진 업로드

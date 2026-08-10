@@ -18,15 +18,29 @@ class TripMemberRepository
         $this->add($tripId, $userId, 'OWNER');
     }
 
+    // uk_trip_user(trip_id, user_id) upsert — 나갔던(LEFT) 멤버가 초대코드로 재입장하는 경우 기존 행을 되살림
     public function addMember(int $tripId, int $userId): void
     {
-        $this->add($tripId, $userId, 'MEMBER');
+        $this->pdo->prepare(
+            "INSERT INTO trip_members (trip_id, user_id, role, member_status, joined_at, left_at)
+             VALUES (?, ?, 'MEMBER', 'JOINED', NOW(), NULL)
+             ON DUPLICATE KEY UPDATE role = 'MEMBER', member_status = 'JOINED', joined_at = NOW(), left_at = NULL"
+        )->execute([$tripId, $userId]);
     }
 
     private function add(int $tripId, int $userId, string $role): void
     {
         $this->pdo->prepare('INSERT INTO trip_members (trip_id, user_id, role) VALUES (?, ?, ?)')
             ->execute([$tripId, $userId, $role]);
+    }
+
+    // 나가기 — 본인 참여 상태만 LEFT로 변경. 방장은 컨트롤러에서 사전에 막음
+    public function markLeft(int $tripId, int $userId): void
+    {
+        $this->pdo->prepare(
+            "UPDATE trip_members SET member_status = 'LEFT', left_at = NOW()
+             WHERE trip_id = ? AND user_id = ? AND member_status = 'JOINED'"
+        )->execute([$tripId, $userId]);
     }
 
     // 안드로이드 아바타 스택(S03)·멤버 목록(S09) 표시용으로 users 조인해서 nickname/profile_image_url도 같이 반환

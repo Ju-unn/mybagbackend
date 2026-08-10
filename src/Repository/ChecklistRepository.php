@@ -143,4 +143,11 @@ class ChecklistRepository
         $this->pdo->prepare("UPDATE packing_items SET item_status = 'DELETED', deleted_at = NOW() WHERE trip_id = ? AND source = 'AI' AND item_status = 'ACTIVE'")
             ->execute([$tripId]);
     }
+
+    // 나가기 시 본인이 담당하던 물품의 담당자를 해제 — 남은 멤버 화면에 나간 사람이 계속 담당자로 남지 않도록
+    public function unassignByTripAndUser(int $tripId, int $userId): void
+    {
+        $this->pdo->prepare('UPDATE packing_items SET assignee_user_id = NULL WHERE trip_id = ? AND assignee_user_id = ?')
+            ->execute([$tripId, $userId]);
+    }
 }

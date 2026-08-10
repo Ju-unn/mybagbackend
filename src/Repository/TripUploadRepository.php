@@ -73,6 +73,16 @@ class TripUploadRepository
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    // 방 삭제 시 trips FK가 ON DELETE CASCADE라 DB row는 자동 정리되지만 실제 파일은 안 지워짐 —
+    // cascade로 사라지기 전에 file_path를 미리 확보해두고, 트립 삭제 커밋 후 FileUploader::delete()로 지운다
+    public function findFilePathsByTripId(int $tripId): array
+    {
+        $stmt = $this->pdo->prepare('SELECT file_path FROM trip_uploads WHERE trip_id = ?');
+        $stmt->execute([$tripId]);
+
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
+
     public function deleteByIds(array $uploadIds): void
     {
         if ($uploadIds === []) {

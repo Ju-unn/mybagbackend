@@ -55,4 +55,10 @@ class NotificationLogRepository
             'INSERT IGNORE INTO notification_log (trip_id, user_id, notify_type) VALUES (?, ?, ?)'
         )->execute([$tripId, $userId, $type]);
     }
+
+    // 방 삭제 시 필수 — notification_log.trip_id FK는 CASCADE가 없어 남아있으면 trips DELETE가 constraint violation으로 실패함
+    public function deleteByTripId(int $tripId): void
+    {
+        $this->pdo->prepare('DELETE FROM notification_log WHERE trip_id = ?')->execute([$tripId]);
+    }
 }
