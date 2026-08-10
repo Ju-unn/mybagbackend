@@ -143,8 +143,11 @@ class TripService
         }
 
         $tripId = (int) $invite['trip_id'];
+        // 이미 참여 중이면 에러 대신 멱등하게 trip_id만 반환 — 카카오톡 초대 링크를 다시 눌렀을 때
+        // (본인이 이미 들어와 있는 방) 클라이언트가 에러 화면 대신 기존 join 성공 경로(방 이동)를
+        // 그대로 타면 되도록 하기 위함. 재등록/재시딩은 하지 않는다.
         if ($this->memberRepository->findRole($tripId, $userId) !== null) {
-            throw new RuntimeException('이미 참여 중인 방입니다.');
+            return ['trip_id' => $tripId];
         }
 
         $this->memberRepository->addMember($tripId, $userId);

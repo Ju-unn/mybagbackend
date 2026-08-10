@@ -40,11 +40,16 @@ class ChecklistService
         return $items;
     }
 
-    // BS02 항목 직접 추가
+    // BS02 항목 직접 추가 — 같은 이름이 이미 활성 상태로 있으면 거부(중복 row 생성 방지)
     public function addItem(int $tripId, int $userId, string $itemName, ?string $category, string $priority, string $scope): int
     {
         $this->assertPriority($priority);
         $this->assertScope($scope);
+
+        $itemName = trim($itemName);
+        if ($this->checklistRepository->existsActiveByName($tripId, $itemName, $scope, $userId)) {
+            throw new RuntimeException('이미 있는 물품입니다.');
+        }
 
         return $this->checklistRepository->create($tripId, $userId, $itemName, $category, $priority, $scope);
     }

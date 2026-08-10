@@ -78,9 +78,9 @@ header('Content-Type: text/html; charset=utf-8');
 <?php if ($invite): ?>
   <img class="icon" src="<?= htmlspecialchars(APP_ICON_URL, ENT_QUOTES) ?>" alt="MyBag">
   <h1>여행방에 초대됐어요</h1>
-  <p>MyBag에서 함께 짐을 챙겨보아요.<br>아래 버튼을 눌러 앱에서 참여해 주세요.</p>
+  <p>내가방 앱에서 함께 짐을 챙겨보아요.<br>아래 버튼을 눌러 앱에서 참여해 주세요.</p>
   <span class="code-pill"><?= htmlspecialchars($code, ENT_QUOTES) ?></span>
-  <a class="btn" href="<?= htmlspecialchars($appLink, ENT_QUOTES) ?>">MyBag 앱에서 열기</a>
+  <a class="btn" href="<?= htmlspecialchars($appLink, ENT_QUOTES) ?>">내가방 앱에서 열기</a>
   <p class="footnote">앱이 설치되어 있지 않다면 먼저 설치한 뒤 초대 링크를 다시 눌러주세요.</p>
 <?php else: ?>
   <img class="icon" src="<?= htmlspecialchars(APP_ICON_URL, ENT_QUOTES) ?>" alt="MyBag" style="filter:grayscale(1);opacity:.55">

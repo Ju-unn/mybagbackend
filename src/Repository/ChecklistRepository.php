@@ -78,6 +78,23 @@ class ChecklistRepository
         return $row ?: null;
     }
 
+    // BS02 중복 추가 방지용 사전 확인 — COMMON은 트립 전체 기준(누가 만들었든 이름이 겹치면 중복),
+    // PERSONAL은 본인 항목끼리만 비교(다른 멤버가 같은 이름을 개인 물품으로 갖는 건 정상)
+    public function existsActiveByName(int $tripId, string $itemName, string $scope, int $userId): bool
+    {
+        $sql = "SELECT 1 FROM packing_items
+                WHERE trip_id = ? AND item_name = ? AND item_scope = ? AND item_status = 'ACTIVE'";
+        $params = [$tripId, $itemName, $scope];
+        if ($scope === 'PERSONAL') {
+            $sql .= ' AND created_by_user_id = ?';
+            $params[] = $userId;
+        }
+        $stmt = $this->pdo->prepare($sql . ' LIMIT 1');
+        $stmt->execute($params);
+
+        return (bool) $stmt->fetchColumn();
+    }
+
     // BS02 항목 직접 추가 — 사용자가 손으로 추가한 항목(source=USER). PERSONAL이면 본인을 담당자로 바로 지정
     public function create(int $tripId, int $userId, string $itemName, ?string $category, string $priority, string $scope): int
     {
