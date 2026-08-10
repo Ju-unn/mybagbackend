@@ -11,6 +11,7 @@ use App\Repository\TripInviteRepository;
 use App\Repository\TripMemberRepository;
 use App\Repository\TripRepository;
 use App\Repository\TripUploadRepository;
+use App\Repository\UserDefaultItemRepository;
 use App\Support\FileUploader;
 use PDO;
 use RuntimeException;
@@ -31,6 +32,7 @@ class TripService
         private WeatherService $weatherService,
         private NotificationService $notificationService,
         private NotificationLogRepository $notificationLogRepository,
+        private UserDefaultItemRepository $userDefaultItemRepository,
     ) {
     }
 
@@ -67,6 +69,11 @@ class TripService
                 $analysisId,
                 $analysis['result_json'],
                 $scopeByItemName
+            );
+            $this->checklistRepository->seedFromUserDefaults(
+                $tripId,
+                $ownerUserId,
+                $this->userDefaultItemRepository->findByUser($ownerUserId)
             );
             $inviteCode = $this->generateInviteCode();
             $this->inviteRepository->create($tripId, $ownerUserId, $inviteCode);
@@ -136,6 +143,13 @@ class TripService
 
         $this->memberRepository->addMember($tripId, $userId);
         $this->inviteRepository->incrementUsedCount((int) $invite['invite_id']);
+        if (!$this->checklistRepository->hasDefaultItems($tripId, $userId)) {
+            $this->checklistRepository->seedFromUserDefaults(
+                $tripId,
+                $userId,
+                $this->userDefaultItemRepository->findByUser($userId)
+            );
+        }
 
         return ['trip_id' => $tripId];
     }
@@ -177,12 +191,14 @@ class TripService
     }
 
     // 팀원 나가기(F-신규, 2026-08-10 — 15번 섹션 G '제외 확정' 결정을 뒤집는 요청) — 본인 참여 상태만 LEFT로 변경,
-    // 트립/다른 멤버 데이터는 그대로 둠. 담당하던 물품은 해제해서 남은 멤버 화면에 나간 사람이 안 보이게 함.
+    // 트립/다른 멤버 데이터는 그대로 둠. 담당하던 공용 물품은 해제해서 남은 멤버 화면에 나간 사람이 안 보이게 하고,
+    // 본인 개인 물품(직접 추가+프로필 시딩)은 소프트 삭제해서 나간 사람 물품이 화면에 안 남게 함.
     // 방장은 나갈 수 없다는 규칙은 컨트롤러가 role로 사전에 막음(TripMemberMiddleware 반환값 이용)
     public function leaveTrip(int $tripId, int $userId): void
     {
         $this->memberRepository->markLeft($tripId, $userId);
         $this->checklistRepository->unassignByTripAndUser($tripId, $userId);
+        $this->checklistRepository->softDeletePersonalItemsByTripAndUser($tripId, $userId);
     }
 
     private function generateInviteCode(): string

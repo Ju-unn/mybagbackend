@@ -18,6 +18,7 @@ use App\Repository\TripInviteRepository;
 use App\Repository\TripMemberRepository;
 use App\Repository\TripRepository;
 use App\Repository\TripUploadRepository;
+use App\Repository\UserDefaultItemRepository;
 use App\Service\NotificationService;
 use App\Service\TripService;
 use App\Service\WeatherService;
@@ -50,5 +51,6 @@ $controller = new TripController($pdo, new TripService(
     ),
     new NotificationService(new FcmApiClient(), new NotificationRepository($pdo)),
     new NotificationLogRepository($pdo),
+    new UserDefaultItemRepository($pdo),
 ));
 $controller->leave();

@@ -144,10 +144,60 @@ class ChecklistRepository
             ->execute([$tripId]);
     }
 
-    // 나가기 시 본인이 담당하던 물품의 담당자를 해제 — 남은 멤버 화면에 나간 사람이 계속 담당자로 남지 않도록
+    // 나가기 시 본인이 담당하던 공용 물품의 담당자를 해제 — 남은 멤버 화면에 나간 사람이 계속 담당자로 남지 않도록.
+    // PERSONAL 항목도 생성 시 assignee_user_id가 본인으로 채워지지만 그건 softDeletePersonalItemsByTripAndUser가
+    // 따로 정리하므로 여기선 COMMON만 건드린다.
     public function unassignByTripAndUser(int $tripId, int $userId): void
     {
-        $this->pdo->prepare('UPDATE packing_items SET assignee_user_id = NULL WHERE trip_id = ? AND assignee_user_id = ?')
-            ->execute([$tripId, $userId]);
+        $this->pdo->prepare(
+            "UPDATE packing_items SET assignee_user_id = NULL WHERE trip_id = ? AND assignee_user_id = ? AND item_scope = 'COMMON'"
+        )->execute([$tripId, $userId]);
+    }
+
+    // 나가기 시 본인의 개인 물품(직접 추가 USER + 프로필에서 시딩된 DEFAULT)을 정리 — 트립을 떠난 사람의
+    // 개인 준비물이 화면에 계속 남지 않도록 한다.
+    public function softDeletePersonalItemsByTripAndUser(int $tripId, int $userId): void
+    {
+        $this->pdo->prepare(
+            "UPDATE packing_items SET item_status = 'DELETED', deleted_at = NOW()
+             WHERE trip_id = ? AND created_by_user_id = ? AND item_scope = 'PERSONAL' AND item_status = 'ACTIVE'"
+        )->execute([$tripId, $userId]);
+    }
+
+    // 재입장(leave 후 join) 시 중복 시딩 방지 — 나가기 때 소프트 삭제된 옛 DEFAULT 항목은 세지 않고
+    // 살아있는 것만 확인해서, 재입장하면 그 시점 프로필 스냅샷으로 다시 채워지게 한다.
+    public function hasDefaultItems(int $tripId, int $userId): bool
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT 1 FROM packing_items WHERE trip_id = ? AND created_by_user_id = ? AND source = 'DEFAULT' AND item_status = 'ACTIVE' LIMIT 1"
+        );
+        $stmt->execute([$tripId, $userId]);
+
+        return (bool) $stmt->fetchColumn();
+    }
+
+    // 트립 생성/참여 시점에 user_default_items(프로필 "내 기본 물품")를 PERSONAL 항목으로 1회 스냅샷 복사.
+    // 이후 프로필 목록이 바뀌어도 이미 만든 트립엔 소급 반영되지 않음(의도된 설계) — 트립 안에서 더
+    // 챙길 게 있으면 체크리스트 화면의 "항목 추가"로 그 트립에만 개인적으로 추가한다.
+    public function seedFromUserDefaults(int $tripId, int $userId, array $defaultItems): void
+    {
+        if ($defaultItems === []) {
+            return;
+        }
+
+        $stmt = $this->pdo->prepare(
+            "INSERT INTO packing_items (trip_id, created_by_user_id, item_name, category, priority, item_scope, source, assignee_user_id)
+             VALUES (?, ?, ?, ?, ?, 'PERSONAL', 'DEFAULT', ?)"
+        );
+        foreach ($defaultItems as $item) {
+            $stmt->execute([
+                $tripId,
+                $userId,
+                $item['item_name'],
+                $item['category'],
+                $item['default_priority'],
+                $userId,
+            ]);
+        }
     }
 }
