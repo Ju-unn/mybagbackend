@@ -746,11 +746,12 @@ S10 — 목적지·기간·날씨 예보를 바탕으로 옷차림/음식/숙소
   "message": "조회 성공",
   "data": {
     "items": [
-      { "default_item_id": 1, "user_id": 1, "item_name": "상비약", "category": "건강", "default_priority": "OPTIONAL", "is_active": 1 }
+      { "default_item_id": 1, "user_id": 1, "item_name": "상비약", "category": "건강", "default_priority": "OPTIONAL", "is_active": 1, "created_at": "2026-08-01 10:00:00", "updated_at": "2026-08-10 09:00:00" }
     ]
   }
 }
 ```
+`updated_at` 내림차순 정렬(최근 추가/수정/재추가된 항목이 먼저). `is_active=0`(삭제됨)인 항목은 응답에서 제외.
 
 ---
 

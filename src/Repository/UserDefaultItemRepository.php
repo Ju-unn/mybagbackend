@@ -20,7 +20,7 @@ class UserDefaultItemRepository
     public function findByUser(int $userId): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT * FROM user_default_items WHERE user_id = ? AND is_active = 1 ORDER BY default_item_id'
+            'SELECT * FROM user_default_items WHERE user_id = ? AND is_active = 1 ORDER BY updated_at DESC'
         );
         $stmt->execute([$userId]);
 
