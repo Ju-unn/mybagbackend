@@ -74,17 +74,24 @@ class ChecklistController
         ApiResponse::send(true, '변경 완료', $result);
     }
 
-    // POST /api/checklist/assign.php (JSON: {item_id, assignee_user_id}) — assignee_user_id 비우면 해제, 본인만 지정·해제 가능
+    // POST /api/checklist/assign.php
+    // - 단일: (JSON: {item_id, assignee_user_id}) — assignee_user_id 비우면 해제. 본인만 지정·해제 가능(방장은 예외로 남에게도 가능)
+    // - 다중: (JSON: {item_id, assignee_user_ids: [...]}) — 방장 전용, 공용 물품 하나를 여러 멤버에게 동시 배정(row 복제)
     public function assign(): void
     {
         $user = AuthMiddleware::handle();
         $body = $this->body();
         $item = $this->itemForMember($user['id'], $body);
-
-        $assigneeUserId = !empty($body['assignee_user_id']) ? (int) $body['assignee_user_id'] : null;
+        $isHost = TripMemberMiddleware::handle($this->pdo, (int) $item['trip_id'], $user['id']) === 'OWNER';
 
         try {
-            $this->checklistService->assign($item, $user['id'], $assigneeUserId);
+            if (isset($body['assignee_user_ids']) && is_array($body['assignee_user_ids'])) {
+                $assigneeUserIds = array_values(array_unique(array_map('intval', $body['assignee_user_ids'])));
+                $this->checklistService->assignMultiple($item, $user['id'], $isHost, $assigneeUserIds);
+            } else {
+                $assigneeUserId = !empty($body['assignee_user_id']) ? (int) $body['assignee_user_id'] : null;
+                $this->checklistService->assign($item, $user['id'], $isHost, $assigneeUserId);
+            }
         } catch (RuntimeException $e) {
             ApiResponse::send(false, $e->getMessage(), [], 403);
         }

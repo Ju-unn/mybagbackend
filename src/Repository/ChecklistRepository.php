@@ -104,11 +104,36 @@ class ChecklistRepository
             ->execute([$isCompleted ? 1 : 0, $isCompleted ? date('Y-m-d H:i:s') : null, $packingItemId]);
     }
 
-    // 담당자 지정/해제 — 본인만 가능하다는 규칙은 Service에서 검증하고 여기선 반영만 함
+    // 담당자 지정/해제 — 방장만 남에게 배정 가능하다는 규칙은 Service에서 검증하고 여기선 반영만 함
     public function assign(int $packingItemId, ?int $assigneeUserId): void
     {
         $this->pdo->prepare('UPDATE packing_items SET assignee_user_id = ? WHERE packing_item_id = ?')
             ->execute([$assigneeUserId, $packingItemId]);
+    }
+
+    // 방장의 다중 배정(ChecklistService::assignMultiple) 시 첫 번째 대상 외 나머지 인원을 위해
+    // 같은 물품 정보(이름/카테고리/우선순위/반입규정)로 COMMON row를 복제해서 각자 배정
+    public function cloneForAssignee(array $sourceItem, int $assigneeUserId): int
+    {
+        $stmt = $this->pdo->prepare(
+            "INSERT INTO packing_items
+                (trip_id, created_by_user_id, analysis_id, item_name, category, priority, item_scope, source, restriction_type, restriction_reason, assignee_user_id)
+             VALUES (?, ?, ?, ?, ?, ?, 'COMMON', ?, ?, ?, ?)"
+        );
+        $stmt->execute([
+            $sourceItem['trip_id'],
+            $sourceItem['created_by_user_id'],
+            $sourceItem['analysis_id'] !== null ? (int) $sourceItem['analysis_id'] : null,
+            $sourceItem['item_name'],
+            $sourceItem['category'],
+            $sourceItem['priority'],
+            $sourceItem['source'],
+            $sourceItem['restriction_type'],
+            $sourceItem['restriction_reason'],
+            $assigneeUserId,
+        ]);
+
+        return (int) $this->pdo->lastInsertId();
     }
 
     // $fields 키는 UPDATABLE_COLUMNS로만 필터링 — 컬럼명을 직접 조립하므로 화이트리스트 필수

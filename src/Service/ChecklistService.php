@@ -68,14 +68,20 @@ class ChecklistService
         return ['is_completed' => $next];
     }
 
-    // S11 "탭하면 본인 담당 지정 → 해제도 본인만 가능"
-    public function assign(array $item, int $userId, ?int $assigneeUserId): void
+    // S11 "탭하면 본인 담당 지정 → 해제도 본인만 가능" — 방장은 예외로 다른 멤버에게도 배정/해제 가능
+    // (Android ChecklistPresenter.assignItem()이 이미 이렇게 가정하고 있어 맞춤)
+    public function assign(array $item, int $userId, bool $isHost, ?int $assigneeUserId): void
     {
-        if ($assigneeUserId !== null && $assigneeUserId !== $userId) {
-            throw new RuntimeException('본인만 담당으로 지정할 수 있습니다.');
+        if (!$isHost) {
+            if ($assigneeUserId !== null && $assigneeUserId !== $userId) {
+                throw new RuntimeException('본인만 담당으로 지정할 수 있습니다.');
+            }
+            if ($assigneeUserId === null && (int) ($item['assignee_user_id'] ?? 0) !== $userId) {
+                throw new RuntimeException('본인이 담당한 항목만 해제할 수 있습니다.');
+            }
         }
-        if ($assigneeUserId === null && (int) ($item['assignee_user_id'] ?? 0) !== $userId) {
-            throw new RuntimeException('본인이 담당한 항목만 해제할 수 있습니다.');
+        if ($assigneeUserId !== null && $this->tripMemberRepository->findRole((int) $item['trip_id'], $assigneeUserId) === null) {
+            throw new RuntimeException('트립 참여자에게만 배정할 수 있습니다.');
         }
 
         $this->checklistRepository->assign((int) $item['packing_item_id'], $assigneeUserId);
@@ -88,6 +94,44 @@ class ChecklistService
                 'item_name' => (string) $item['item_name'],
             ]);
         }
+    }
+
+    // 방장이 COMMON 물품 하나를 여러 멤버에게 한 번에 배정 — "물품 1개=담당자 1명" 제약은 그대로 두고,
+    // 첫 번째 대상은 기존 row를 배정하고 나머지는 같은 이름·같은 반입규정 정보로 row를 복제해서 각자 배정한다.
+    // (여권처럼 각자 챙겨야 하는 물품을 방장이 특정 인원들에게 지정하는 경우)
+    // ponytail: 같은 대상 조합으로 재호출하면 복제 row가 또 쌓임 — 최초 1회성 배정용, 필요해지면 기존 배정 대조 후 스킵하도록 보강
+    public function assignMultiple(array $item, int $userId, bool $isHost, array $assigneeUserIds): void
+    {
+        if ($item['item_scope'] !== 'COMMON') {
+            throw new RuntimeException('공용 물품만 여러 명에게 배정할 수 있습니다.');
+        }
+        if (!$isHost) {
+            throw new RuntimeException('공용 물품을 여러 명에게 배정하는 건 방장만 할 수 있습니다.');
+        }
+
+        $tripId = (int) $item['trip_id'];
+        $uniqueIds = array_values(array_unique($assigneeUserIds));
+        if ($uniqueIds === []) {
+            throw new RuntimeException('배정할 멤버를 선택해주세요.');
+        }
+        foreach ($uniqueIds as $assigneeUserId) {
+            if ($this->tripMemberRepository->findRole($tripId, $assigneeUserId) === null) {
+                throw new RuntimeException('트립 참여자에게만 배정할 수 있습니다.');
+            }
+        }
+
+        $first = array_shift($uniqueIds);
+        $this->checklistRepository->assign((int) $item['packing_item_id'], $first);
+        foreach ($uniqueIds as $assigneeUserId) {
+            $this->checklistRepository->cloneForAssignee($item, $assigneeUserId);
+        }
+
+        $this->notifyOtherMembers($tripId, $userId, [
+            'type' => 'CHECKLIST_ASSIGNED',
+            'trip_id' => (string) $tripId,
+            'item_id' => (string) $item['packing_item_id'],
+            'item_name' => (string) $item['item_name'],
+        ]);
     }
 
     // 담당자 지정 시 본인을 제외한 트립 멤버 전원에게 발송 — 토큰 없는 멤버는 자동으로 스킵됨

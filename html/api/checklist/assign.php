@@ -1,5 +1,6 @@
 <?php
-// POST /api/checklist/assign.php (JSON: {item_id, assignee_user_id}) — 담당자 지정/해제(본인만)
+// POST /api/checklist/assign.php — 단일 (JSON: {item_id, assignee_user_id}, 본인만/방장은 예외)
+// 또는 다중 (JSON: {item_id, assignee_user_ids: [...]}, 방장 전용 — COMMON 물품을 여러 명에게 동시 배정)
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../../bootstrap/app.php';
