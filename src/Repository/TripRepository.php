@@ -43,6 +43,17 @@ class TripRepository
         return $trip ?: null;
     }
 
+    // 참여(join) 정원 검사용 — trips 행을 FOR UPDATE로 잠가 같은 방 동시 join을 직렬화한다.
+    // 반드시 트랜잭션 안에서 호출할 것(밖에서 부르면 잠금 효과 없음).
+    public function findByIdForUpdate(int $tripId): ?array
+    {
+        $stmt = $this->pdo->prepare('SELECT * FROM trips WHERE trip_id = ? FOR UPDATE');
+        $stmt->execute([$tripId]);
+        $trip = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $trip ?: null;
+    }
+
     // 홈(S03, $upcoming=true, 임박한 일정 순) / 보관함(S14, $upcoming=false, 최근 종료 순) 공용
     // 상태 컬럼(trips.status) 대신 end_date로 판정 — status를 ARCHIVED로 바꾸는 로직이 없어도(15번 섹션 E-1) 동작함
     public function findByUserId(int $userId, bool $upcoming = true): array

@@ -143,15 +143,32 @@ class TripService
         }
 
         $tripId = (int) $invite['trip_id'];
-        // 이미 참여 중이면 에러 대신 멱등하게 trip_id만 반환 — 카카오톡 초대 링크를 다시 눌렀을 때
-        // (본인이 이미 들어와 있는 방) 클라이언트가 에러 화면 대신 기존 join 성공 경로(방 이동)를
-        // 그대로 타면 되도록 하기 위함. 재등록/재시딩은 하지 않는다.
+        // 이미 JOINED 상태인 본인이 링크를 다시 누른 경우(카톡/일반 링크 재탭) — 이미 방에 있는 사람이라
+        // 정원에 이미 포함돼 있으니 아래 정원 검사보다 먼저 멱등 반환한다(안 그러면 가득 찬 방의 기존
+        // 멤버가 자기 방 링크를 눌렀을 때 정원 초과로 거부되는 버그). 나갔다(LEFT) 돌아오는 사람은
+        // findRole이 null이라 여기서 안 걸리고 아래 정원 검사를 정상적으로 받는다.
         if ($this->memberRepository->findRole($tripId, $userId) !== null) {
             return ['trip_id' => $tripId];
         }
 
-        $this->memberRepository->addMember($tripId, $userId);
-        $this->inviteRepository->incrementUsedCount((int) $invite['invite_id']);
+        // 방 생성 시 정한 정원(expected_member_count) 초과 차단 — 2인 방이면 2명까지만.
+        // 카톡·일반 링크 모두 이 함수 한 곳으로 들어오므로 여기서 막으면 전 참여 경로가 커버됨.
+        // 동시 join 레이스는 trips 행을 FOR UPDATE로 잠가 직렬화(같은 방 join끼리 순차 처리)한다.
+        $this->pdo->beginTransaction();
+        try {
+            $trip = $this->tripRepository->findByIdForUpdate($tripId);
+            $capacity = $trip !== null ? (int) $trip['expected_member_count'] : 0;
+            if ($capacity > 0 && $this->memberRepository->countActive($tripId) >= $capacity) {
+                throw new RuntimeException("방 정원이 가득 찼습니다. (최대 {$capacity}명)");
+            }
+            $this->memberRepository->addMember($tripId, $userId);
+            $this->inviteRepository->incrementUsedCount((int) $invite['invite_id']);
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+
         if (!$this->checklistRepository->hasDefaultItems($tripId, $userId)) {
             $this->checklistRepository->seedFromUserDefaults(
                 $tripId,
