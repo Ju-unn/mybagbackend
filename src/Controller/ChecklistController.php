@@ -76,18 +76,22 @@ class ChecklistController
 
     // POST /api/checklist/assign.php
     // - 단일: (JSON: {item_id, assignee_user_id}) — assignee_user_id 비우면 해제. 본인만 지정·해제 가능(방장은 예외로 남에게도 가능)
-    // - 다중: (JSON: {item_id, assignee_user_ids: [...]}) — 방장 전용, 공용 물품 하나를 여러 멤버에게 동시 배정(row 복제)
+    // - 다중 동기화: (JSON: {item_group_id 또는 item_id, assignee_user_ids: [...]}) — 방장 전용,
+    //   그룹(원본+복제 row)의 담당자를 최종 목록으로 트랜잭션 동기화. 빈 배열이면 전원 해제
     public function assign(): void
     {
         $user = AuthMiddleware::handle();
         $body = $this->body();
+        if (!isset($body['item_id']) && isset($body['item_group_id'])) {
+            // item_group_id는 그룹 원본 row의 packing_item_id와 같으므로 조회용 item_id로 그대로 사용 가능
+            $body['item_id'] = (int) $body['item_group_id'];
+        }
         $item = $this->itemForMember($user['id'], $body);
         $isHost = TripMemberMiddleware::handle($this->pdo, (int) $item['trip_id'], $user['id']) === 'OWNER';
 
         try {
             if (isset($body['assignee_user_ids']) && is_array($body['assignee_user_ids'])) {
-                $assigneeUserIds = array_values(array_unique(array_map('intval', $body['assignee_user_ids'])));
-                $this->checklistService->assignMultiple($item, $user['id'], $isHost, $assigneeUserIds);
+                $this->checklistService->syncAssignees($item, $user['id'], $isHost, $body['assignee_user_ids']);
             } else {
                 $assigneeUserId = !empty($body['assignee_user_id']) ? (int) $body['assignee_user_id'] : null;
                 $this->checklistService->assign($item, $user['id'], $isHost, $assigneeUserId);

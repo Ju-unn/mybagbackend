@@ -51,9 +51,11 @@ class ChecklistRepository
     }
 
     // 델타 조회(S11/S12) — since 있으면 변경분만(체크·할당·수정·삭제 전부 updated_at 갱신), 없으면 활성 항목 전체
+    // item_group_id는 NULL이면 자기 자신이 그룹 원본이라는 뜻이라 응답에선 항상 COALESCE로 채워서 내려줌
+    // (FETCH_ASSOC은 같은 이름의 뒤 컬럼이 앞 컬럼을 덮으므로 별칭이 원본 NULL 값을 대체)
     public function findByTripSince(int $tripId, ?string $since): array
     {
-        $sql = 'SELECT * FROM packing_items WHERE trip_id = ?';
+        $sql = 'SELECT *, COALESCE(item_group_id, packing_item_id) AS item_group_id FROM packing_items WHERE trip_id = ?';
         $params = [$tripId];
         if ($since !== null && $since !== '') {
             $sql .= ' AND updated_at > ?';
@@ -71,7 +73,7 @@ class ChecklistRepository
 
     public function findById(int $packingItemId): ?array
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM packing_items WHERE packing_item_id = ?');
+        $stmt = $this->pdo->prepare('SELECT *, COALESCE(item_group_id, packing_item_id) AS item_group_id FROM packing_items WHERE packing_item_id = ?');
         $stmt->execute([$packingItemId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -128,19 +130,21 @@ class ChecklistRepository
             ->execute([$assigneeUserId, $packingItemId]);
     }
 
-    // 방장의 다중 배정(ChecklistService::assignMultiple) 시 첫 번째 대상 외 나머지 인원을 위해
-    // 같은 물품 정보(이름/카테고리/우선순위/반입규정)로 COMMON row를 복제해서 각자 배정
+    // 방장의 다중 배정(ChecklistService::assignMultiple) 시 원본 외 나머지 인원을 위해
+    // 같은 물품 정보(이름/카테고리/우선순위/반입규정)로 COMMON row를 복제해서 각자 배정.
+    // 복제본은 item_group_id에 원본의 그룹 id를 저장해 원본과 한 묶음임을 표시
     public function cloneForAssignee(array $sourceItem, int $assigneeUserId): int
     {
         $stmt = $this->pdo->prepare(
             "INSERT INTO packing_items
-                (trip_id, created_by_user_id, analysis_id, item_name, category, priority, item_scope, source, restriction_type, restriction_reason, assignee_user_id)
-             VALUES (?, ?, ?, ?, ?, ?, 'COMMON', ?, ?, ?, ?)"
+                (trip_id, created_by_user_id, analysis_id, item_group_id, item_name, category, priority, item_scope, source, restriction_type, restriction_reason, assignee_user_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'COMMON', ?, ?, ?, ?)"
         );
         $stmt->execute([
             $sourceItem['trip_id'],
             $sourceItem['created_by_user_id'],
             $sourceItem['analysis_id'] !== null ? (int) $sourceItem['analysis_id'] : null,
+            (int) ($sourceItem['item_group_id'] ?? $sourceItem['packing_item_id']),
             $sourceItem['item_name'],
             $sourceItem['category'],
             $sourceItem['priority'],
@@ -151,6 +155,29 @@ class ChecklistRepository
         ]);
 
         return (int) $this->pdo->lastInsertId();
+    }
+
+    // 다중 배정 동기화(ChecklistService::syncAssignees)용 — 그룹(원본+복제)의 활성 row 전체를 잠그고 조회.
+    // 반드시 트랜잭션 안에서 호출할 것(FOR UPDATE)
+    public function findGroupForUpdate(int $tripId, int $groupId): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT *, COALESCE(item_group_id, packing_item_id) AS item_group_id
+             FROM packing_items
+             WHERE trip_id = ? AND item_status = 'ACTIVE' AND (packing_item_id = ? OR item_group_id = ?)
+             ORDER BY packing_item_id
+             FOR UPDATE"
+        );
+        $stmt->execute([$tripId, $groupId, $groupId]);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    // 동기화 중 담당자 교체/해제 — 이전 담당자의 체크 상태가 다음 담당자에게 넘어가지 않도록 완료 상태도 초기화
+    public function reassignForSync(int $packingItemId, ?int $assigneeUserId): void
+    {
+        $this->pdo->prepare('UPDATE packing_items SET assignee_user_id = ?, is_completed = 0, completed_at = NULL WHERE packing_item_id = ?')
+            ->execute([$assigneeUserId, $packingItemId]);
     }
 
     // $fields 키는 UPDATABLE_COLUMNS로만 필터링 — 컬럼명을 직접 조립하므로 화이트리스트 필수

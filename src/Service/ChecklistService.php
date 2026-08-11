@@ -101,11 +101,14 @@ class ChecklistService
         }
     }
 
-    // 방장이 COMMON 물품 하나를 여러 멤버에게 한 번에 배정 — "물품 1개=담당자 1명" 제약은 그대로 두고,
-    // 첫 번째 대상은 기존 row를 배정하고 나머지는 같은 이름·같은 반입규정 정보로 row를 복제해서 각자 배정한다.
-    // (여권처럼 각자 챙겨야 하는 물품을 방장이 특정 인원들에게 지정하는 경우)
-    // ponytail: 같은 대상 조합으로 재호출하면 복제 row가 또 쌓임 — 최초 1회성 배정용, 필요해지면 기존 배정 대조 후 스킵하도록 보강
-    public function assignMultiple(array $item, int $userId, bool $isHost, array $assigneeUserIds): void
+    // 방장이 COMMON 물품 하나(그룹)의 담당자를 "최종 목록"으로 동기화 — 하나의 트랜잭션 안에서
+    // 그룹(원본+복제 row) 전체를 잠근 뒤 최종 assignee_user_ids와 diff:
+    //   · 이미 담당 중인 멤버의 row는 그대로 유지(체크 상태 보존)
+    //   · 새 멤버는 그룹 내 빈 row 재사용, 없으면 복제(item_group_id로 묶임)
+    //   · 빠진 멤버의 row는 원본이면 담당 해제, 복제본이면 소프트 삭제(updated_at 갱신으로 델타 동기화에 잡힘)
+    // 재사용/해제 시 완료 상태를 초기화해 이전 담당자의 체크가 다음 담당자에게 넘어가지 않게 한다.
+    // 빈 배열이면 전원 해제. 같은 목록으로 재호출해도 결과가 같음(멱등) — 예전 복제 누적 버그 해결.
+    public function syncAssignees(array $item, int $userId, bool $isHost, array $assigneeUserIds): void
     {
         if ($item['item_scope'] !== 'COMMON') {
             throw new RuntimeException('공용 물품만 여러 명에게 배정할 수 있습니다.');
@@ -115,28 +118,65 @@ class ChecklistService
         }
 
         $tripId = (int) $item['trip_id'];
-        $uniqueIds = array_values(array_unique($assigneeUserIds));
-        if ($uniqueIds === []) {
-            throw new RuntimeException('배정할 멤버를 선택해주세요.');
-        }
-        foreach ($uniqueIds as $assigneeUserId) {
+        $finalIds = array_values(array_unique(array_map('intval', $assigneeUserIds)));
+        foreach ($finalIds as $assigneeUserId) {
             if ($this->tripMemberRepository->findRole($tripId, $assigneeUserId) === null) {
                 throw new RuntimeException('트립 참여자에게만 배정할 수 있습니다.');
             }
         }
 
-        $first = array_shift($uniqueIds);
-        $this->checklistRepository->assign((int) $item['packing_item_id'], $first);
-        foreach ($uniqueIds as $assigneeUserId) {
-            $this->checklistRepository->cloneForAssignee($item, $assigneeUserId);
+        $groupId = (int) ($item['item_group_id'] ?? $item['packing_item_id']);
+
+        $this->pdo->beginTransaction();
+        try {
+            $rows = $this->checklistRepository->findGroupForUpdate($tripId, $groupId);
+
+            $wanted = array_flip($finalIds);
+            $kept = [];
+            $spareRows = []; // 담당자가 빠졌거나 원래 미배정이던 row — 새 멤버에게 재사용
+            foreach ($rows as $row) {
+                $assignee = $row['assignee_user_id'] !== null ? (int) $row['assignee_user_id'] : null;
+                if ($assignee !== null && isset($wanted[$assignee]) && !isset($kept[$assignee])) {
+                    $kept[$assignee] = true;
+                } else {
+                    $spareRows[] = $row;
+                }
+            }
+
+            foreach (array_diff($finalIds, array_keys($kept)) as $newAssignee) {
+                $spare = array_shift($spareRows);
+                if ($spare !== null) {
+                    $this->checklistRepository->reassignForSync((int) $spare['packing_item_id'], $newAssignee);
+                } else {
+                    $this->checklistRepository->cloneForAssignee($item, $newAssignee);
+                }
+            }
+            foreach ($spareRows as $spare) {
+                $spareId = (int) $spare['packing_item_id'];
+                if ($spareId === $groupId) {
+                    // 그룹 원본은 남겨서 그룹 자체(물품)는 유지 — 담당만 해제
+                    if ($spare['assignee_user_id'] !== null) {
+                        $this->checklistRepository->reassignForSync($spareId, null);
+                    }
+                } else {
+                    $this->checklistRepository->softDelete($spareId);
+                }
+            }
+
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
         }
 
-        $this->notifyOtherMembers($tripId, $userId, [
-            'type' => 'CHECKLIST_ASSIGNED',
-            'trip_id' => (string) $tripId,
-            'item_id' => (string) $item['packing_item_id'],
-            'item_name' => (string) $item['item_name'],
-        ]);
+        if ($finalIds !== []) {
+            $this->notifyOtherMembers($tripId, $userId, [
+                'type' => 'CHECKLIST_ASSIGNED',
+                'trip_id' => (string) $tripId,
+                'item_id' => (string) $groupId,
+                'item_name' => (string) $item['item_name'],
+            ]);
+        }
     }
 
     // 담당자 지정 시 본인을 제외한 트립 멤버 전원에게 발송 — 토큰 없는 멤버는 자동으로 스킵됨

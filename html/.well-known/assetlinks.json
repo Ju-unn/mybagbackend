@@ -5,9 +5,11 @@
       "namespace": "android_app",
       "package_name": "com.mybagteam.mybag",
       "sha256_cert_fingerprints": [
+        "29:1C:D4:F7:7D:DA:7E:CB:FF:FB:F8:36:D1:62:EC:3B:49:AA:AB:F8:47:A9:07:3E:2F:59:ED:7D:AF:7A:D4:AF",
         "17:9F:C3:C8:0B:F4:47:69:79:3B:EF:F8:CF:80:3B:E8:BC:1D:B0:57:CF:07:B9:EF:68:A8:EF:0D:F8:7E:F5:95",
         "FE:47:84:2D:C9:49:8A:D4:08:A8:03:16:6E:A7:F2:67:6A:EC:3C:4D:CE:2F:90:DA:C3:F3:0D:12:32:9C:BE:38",
-        "12:A1:71:19:B6:42:D1:5B:5F:1F:C9:BD:90:02:A6:8A:04:5D:44:0F:BF:C7:12:6F:03:91:BD:55:54:46:6E:1F"
+        "12:A1:71:19:B6:42:D1:5B:5F:1F:C9:BD:90:02:A6:8A:04:5D:44:0F:BF:C7:12:6F:03:91:BD:55:54:46:6E:1F",
+        "2E:6B:17:EA:14:89:B1:E5:8E:AF:1F:99:81:55:38:D7:F1:3C:F5:CE:FE:20:2B:6C:95:02:F1:7E:F4:93:9A:F1"
       ]
     }
   }
