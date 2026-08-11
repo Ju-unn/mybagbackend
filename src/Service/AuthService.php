@@ -14,7 +14,7 @@ use RuntimeException;
 class AuthService
 {
     // 개인정보처리방침·이용약관 시행일 = 동의 버전(문서 개정 시 이 값도 함께 올릴 것)
-    private const POLICY_VERSION = '2026-08-08';
+    private const POLICY_VERSION = '2026-08-11';
 
     public function __construct(
         private KakaoApiClient $kakaoClient,
