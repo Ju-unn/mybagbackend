@@ -65,6 +65,34 @@ class ChecklistService
         return $item;
     }
 
+    // check.php 권한 — 개인 물품은 작성자 본인만, 공용 물품은 방장 또는 담당자만 체크 가능
+    public function assertCanCheck(array $item, int $userId, bool $isHost): void
+    {
+        if ($item['item_scope'] === 'PERSONAL') {
+            if ((int) $item['created_by_user_id'] !== $userId) {
+                throw new RuntimeException('본인 물품만 체크할 수 있습니다.');
+            }
+            return;
+        }
+        if (!$isHost && (int) ($item['assignee_user_id'] ?? 0) !== $userId) {
+            throw new RuntimeException('방장 또는 담당자만 체크할 수 있습니다.');
+        }
+    }
+
+    // update.php/delete.php 권한 — 개인 물품은 작성자 본인만, 공용 물품은 방장만 수정·삭제 가능
+    public function assertCanModify(array $item, int $userId, bool $isHost): void
+    {
+        if ($item['item_scope'] === 'PERSONAL') {
+            if ((int) $item['created_by_user_id'] !== $userId) {
+                throw new RuntimeException('본인 물품만 수정·삭제할 수 있습니다.');
+            }
+            return;
+        }
+        if (!$isHost) {
+            throw new RuntimeException('공용 물품은 방장만 수정·삭제할 수 있습니다.');
+        }
+    }
+
     public function toggleCheck(array $item): array
     {
         $next = !((bool) $item['is_completed']);
@@ -73,15 +101,15 @@ class ChecklistService
         return ['is_completed' => $next];
     }
 
-    // S11 "탭하면 본인 담당 지정 → 해제도 본인만 가능" — 방장은 예외로 다른 멤버에게도 배정/해제 가능
-    // (Android ChecklistPresenter.assignItem()이 이미 이렇게 가정하고 있어 맞춤)
+    // 담당자 지정은 방장만, 해제는 방장 또는 본인 담당분만 — 앱은 방장만 담당자 지정 시트를 열고
+    // 담당자는 '담당 해제'만 하도록 되어 있어(ChecklistCommonFragment/ChecklistMineFragment) 그에 맞춤
     public function assign(array $item, int $userId, bool $isHost, ?int $assigneeUserId): void
     {
         if (!$isHost) {
-            if ($assigneeUserId !== null && $assigneeUserId !== $userId) {
-                throw new RuntimeException('본인만 담당으로 지정할 수 있습니다.');
+            if ($assigneeUserId !== null) {
+                throw new RuntimeException('담당자 지정은 방장만 할 수 있습니다.');
             }
-            if ($assigneeUserId === null && (int) ($item['assignee_user_id'] ?? 0) !== $userId) {
+            if ((int) ($item['assignee_user_id'] ?? 0) !== $userId) {
                 throw new RuntimeException('본인이 담당한 항목만 해제할 수 있습니다.');
             }
         }
