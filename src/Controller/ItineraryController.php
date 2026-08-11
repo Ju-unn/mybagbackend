@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Middleware\AuthMiddleware;
+use App\Middleware\RateLimitMiddleware;
 use App\Service\ItineraryService;
 use App\Support\ApiResponse;
 use GuzzleHttp\Exception\GuzzleException;
@@ -48,6 +49,8 @@ class ItineraryController
     // POST /api/itinerary/analyze.php (JSON body: {"upload_ids": [1, 2]})
     public function analyze(): void
     {
+        RateLimitMiddleware::handle(5, 60); // GPT Vision 호출 비용 상한: 같은 IP 1분에 5회
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             ApiResponse::send(false, 'POST만 허용됩니다.', [], 405);
         }
@@ -76,6 +79,8 @@ class ItineraryController
     // 목적지·기간이 실제로 바뀐 경우 서버가 GPT를 재호출해 반입규정·추천준비물을 새 목적지 기준으로 갱신함
     public function confirm(): void
     {
+        RateLimitMiddleware::handle(5, 60); // 목적지 변경 시 GPT 재호출 비용 상한: 같은 IP 1분에 5회
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             ApiResponse::send(false, 'POST만 허용됩니다.', [], 405);
         }

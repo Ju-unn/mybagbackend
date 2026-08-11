@@ -9,7 +9,11 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../bootstrap/app.php';
 
+use App\Middleware\RateLimitMiddleware;
 use App\Repository\TripInviteRepository;
+
+// 비로그인 접근 가능한 코드 유효성 오라클이라 무차별 대입 방지 필요 (차단 시 429 JSON — 사람은 안 걸리는 빈도)
+RateLimitMiddleware::handle(30, 60);
 
 const PACKAGE_NAME = 'com.example.mybaghackathon';
 const APP_ICON_URL = 'https://mybag.duckdns.org/assets/app_icon.png';

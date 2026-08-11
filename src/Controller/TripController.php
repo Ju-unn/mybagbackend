@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Middleware\AuthMiddleware;
+use App\Middleware\RateLimitMiddleware;
 use App\Middleware\TripMemberMiddleware;
 use App\Middleware\TripOwnerMiddleware;
 use App\Service\TripService;
@@ -102,6 +103,8 @@ class TripController
     // POST /api/trips/join.php (JSON body: {"invite_code": "..."})
     public function join(): void
     {
+        RateLimitMiddleware::handle(10, 60); // 초대코드 무차별 대입 방지: 같은 IP 1분에 10회
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             ApiResponse::send(false, 'POST만 허용됩니다.', [], 405);
         }
