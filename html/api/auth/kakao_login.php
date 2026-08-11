@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../../bootstrap/app.php';
 use App\Client\FcmApiClient;
 use App\Client\KakaoApiClient;
 use App\Controller\AuthController;
+use App\Repository\ConsentRepository;
 use App\Repository\NotificationRepository;
 use App\Repository\UserRepository;
 use App\Service\AuthService;
@@ -20,7 +21,7 @@ try {
 }
 
 $controller = new AuthController(
-    new AuthService(new KakaoApiClient(), new UserRepository($pdo)),
+    new AuthService(new KakaoApiClient(), new UserRepository($pdo), new ConsentRepository($pdo)),
     new NotificationService(new FcmApiClient(), new NotificationRepository($pdo)),
 );
 $controller->kakaoLogin();

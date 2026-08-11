@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Client\KakaoApiClient;
+use App\Repository\ConsentRepository;
 use App\Repository\UserRepository;
 use App\Support\TokenIssuer;
 use RuntimeException;
@@ -12,15 +13,20 @@ use RuntimeException;
 // 카카오 로그인 오케스트레이션. kakao_login.php에서 이전
 class AuthService
 {
+    // 개인정보처리방침·이용약관 시행일 = 동의 버전(문서 개정 시 이 값도 함께 올릴 것)
+    private const POLICY_VERSION = '2026-08-08';
+
     public function __construct(
         private KakaoApiClient $kakaoClient,
         private UserRepository $userRepository,
+        private ConsentRepository $consentRepository,
     ) {
     }
 
-    // 카카오 access_token 검증 → users upsert → 자체 JWT 발급
+    // 카카오 access_token 검증 → users upsert → 동의 기록 → 자체 JWT 발급
     // 카카오 호출 실패는 GuzzleException, 사용자 정보 누락은 RuntimeException으로 던짐 (컨트롤러에서 401 처리)
-    public function login(string $accessToken): array
+    // $privacyAgreed/$termsAgreed: 클라이언트 로그인 화면에서 필수 동의 체크박스로 받은 값
+    public function login(string $accessToken, bool $privacyAgreed = false, bool $termsAgreed = false): array
     {
         $kakaoUser = $this->kakaoClient->fetchUserInfo($accessToken);
 
@@ -33,6 +39,15 @@ class AuthService
         }
 
         $userId = $this->userRepository->upsertFromKakao((string) $kakaoId, $nickname, $profileImageUrl);
+
+        // 동의 이력 기록 — 클라이언트가 필수 체크박스로 게이팅하므로 신규/재로그인 모두 true로 들어옴
+        if ($privacyAgreed) {
+            $this->consentRepository->record($userId, 'PRIVACY', self::POLICY_VERSION);
+        }
+        if ($termsAgreed) {
+            $this->consentRepository->record($userId, 'TERMS', self::POLICY_VERSION);
+        }
+
         $token = TokenIssuer::issue($userId, (string) $kakaoId);
 
         return [

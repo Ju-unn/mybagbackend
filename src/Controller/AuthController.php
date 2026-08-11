@@ -37,7 +37,11 @@ class AuthController
         }
 
         try {
-            $result = $this->authService->login($accessToken);
+            $result = $this->authService->login(
+                $accessToken,
+                (bool) ($body['privacy_agreed'] ?? false),
+                (bool) ($body['terms_agreed'] ?? false),
+            );
         } catch (GuzzleException $e) {
             ApiResponse::send(false, '카카오 토큰이 유효하지 않습니다.', [], 401);
         } catch (RuntimeException $e) {
