@@ -47,4 +47,14 @@ assert(allows(fn () => $modify(item('COMMON', 1, 5), 9, true)) === true);     //
 assert(allows(fn () => $modify(item('COMMON', 1, 5), 5, false)) === false);   // 담당자여도 수정/삭제 X
 assert(allows(fn () => $modify(item('COMMON', 1, 5), 7, false)) === false);   // 일반멤버
 
-echo "OK: 체크리스트 권한 검증 통과\n";
+// --- 이름 정규화(수동 추가 교차 차단용) — Android와 동일 규칙 ---
+$normalizeMethod = new ReflectionMethod(ChecklistService::class, 'normalizeName');
+$normalizeMethod->setAccessible(true);
+$norm = fn (string $s) => $normalizeMethod->invoke($svc, $s);
+
+assert($norm('여 권') === $norm('여권'));           // 공백 제거
+assert($norm('  여권  ') === $norm('여권'));         // 앞뒤 공백
+assert($norm('Power Bank') === $norm('powerbank')); // 공백 + 소문자
+assert($norm('보조배터리') !== $norm('여권'));        // 다른 이름은 다름
+
+echo "OK: 체크리스트 권한 검증 + 이름 정규화 통과\n";

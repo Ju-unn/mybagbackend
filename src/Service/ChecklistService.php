@@ -51,7 +51,31 @@ class ChecklistService
             throw new RuntimeException('이미 있는 물품입니다.');
         }
 
+        // 개인 물품 수동 추가 시, 이미 나에게 배정된 같은 이름의 활성 공용 물품이 있으면 차단 —
+        // 손으로 병합 중복행을 만드는 것 방지(남에게 배정됐거나 미배정인 공용 물품은 차단 안 함).
+        // 이름 비교는 Android(ChecklistDuplicateDetector.normalizedName)와 동일 규칙으로 맞춘다.
+        if ($scope === 'PERSONAL') {
+            $target = $this->normalizeName($itemName);
+            foreach ($this->checklistRepository->findAssignedCommonNames($tripId, $userId) as $commonName) {
+                if ($this->normalizeName($commonName) === $target) {
+                    throw new RuntimeException('이미 담당 중인 공용 물품과 같은 이름입니다.');
+                }
+            }
+        }
+
         return $this->checklistRepository->create($tripId, $userId, $itemName, $category, $priority, $scope);
+    }
+
+    // Android ChecklistDuplicateDetector.normalizedName과 동일: NFKC 정규화 + 공백 제거 + 소문자.
+    // intl(Normalizer) 미탑재 환경에서는 NFKC를 건너뛴다(합성형 한글은 대부분 이미 동일).
+    private function normalizeName(string $name): string
+    {
+        if (class_exists('Normalizer')) {
+            $name = \Normalizer::normalize($name, \Normalizer::FORM_KC) ?: $name;
+        }
+        $name = preg_replace('/\s+/', '', $name);
+
+        return mb_strtolower($name, 'UTF-8');
     }
 
     // 컨트롤러가 멤버십 체크에 쓸 trip_id를 얻기 위해 항목을 먼저 조회

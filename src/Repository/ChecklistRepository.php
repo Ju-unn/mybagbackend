@@ -97,6 +97,19 @@ class ChecklistRepository
         return (bool) $stmt->fetchColumn();
     }
 
+    // 개인 물품 수동 추가 시 교차 중복 차단용 — 현재 유저에게 배정된 활성 공용 물품의 이름 목록.
+    // 이름 정규화(NFKC+공백제거+소문자)는 SQL로 못 하므로 이름만 뽑아 Service에서 비교한다.
+    public function findAssignedCommonNames(int $tripId, int $userId): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT item_name FROM packing_items
+             WHERE trip_id = ? AND assignee_user_id = ? AND item_scope = 'COMMON' AND item_status = 'ACTIVE'"
+        );
+        $stmt->execute([$tripId, $userId]);
+
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
+
     // BS02 항목 직접 추가 — 사용자가 손으로 추가한 항목(source=USER). PERSONAL이면 본인을 담당자로 바로 지정
     public function create(int $tripId, int $userId, string $itemName, ?string $category, string $priority, string $scope): int
     {
