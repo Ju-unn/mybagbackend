@@ -10,6 +10,7 @@ use App\Middleware\TripMemberMiddleware;
 use App\Middleware\TripOwnerMiddleware;
 use App\Service\TripService;
 use App\Support\ApiResponse;
+use App\Support\Validator;
 use PDO;
 use RuntimeException;
 
@@ -38,14 +39,8 @@ class TripController
             ApiResponse::send(false, 'trip_name, expected_member_count, analysis_id는 필수입니다.', [], 400);
         }
 
-        $scopeByItemName = [];
-        foreach ($body['items'] ?? [] as $item) {
-            if (isset($item['item_name'], $item['scope'])) {
-                $scopeByItemName[$item['item_name']] = $item['scope'];
-            }
-        }
-
         try {
+            $scopeByItemName = Validator::parseScopeItems($body['items'] ?? []);
             $result = $this->tripService->createTrip(
                 $user['id'],
                 $tripName,

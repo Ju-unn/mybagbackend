@@ -16,7 +16,8 @@ class ChecklistRepository
     }
 
     // S08 '방 생성 완료' 시점에 ai_analyses.result_json → packing_items 일괄 생성 (Phase 4 create.php 5번 단계)
-    // $scopeByItemName: item_name => 'COMMON'|'PERSONAL' (S08 Scope 토글, 미지정 항목은 기본 COMMON)
+    // $scopeByItemName: item_name => 'COMMON'|'PERSONAL' (S08 Scope 토글). 여기 없는 추천 물품은
+    // 사용자가 선택하지 않은 것으로 보고 생성하지 않는다(빈 배열이면 AI 물품 0개, 기본 물품만 남음).
     // PERSONAL 항목은 이 시점엔 방장뿐이라 assignee를 방장으로 바로 지정
     public function bulkCreateFromAnalysis(int $tripId, int $ownerUserId, int $analysisId, array $resultJson, array $scopeByItemName): void
     {
@@ -32,7 +33,12 @@ class ChecklistRepository
         );
 
         foreach ($resultJson['recommended_items'] ?? [] as $item) {
-            $scope = $scopeByItemName[$item['item_name']] ?? 'COMMON';
+            // S08에서 사용자가 실제 선택한 추천 물품만 생성 — items에 없는 추천은 미선택으로 보고 건너뜀.
+            // (선택 여부는 packing_items 자체가 진실원본이 되어야 하므로 여기서 확정한다)
+            if (!array_key_exists($item['item_name'], $scopeByItemName)) {
+                continue;
+            }
+            $scope = $scopeByItemName[$item['item_name']];
             $restriction = $restrictionsByName[$item['item_name']] ?? null;
 
             $stmt->execute([

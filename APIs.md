@@ -146,7 +146,7 @@ JWT는 stateless라 서버 측 블랙리스트는 없음 — 클라이언트가 
   ]
 }
 ```
-`items`는 S08 화면의 공용/개인 토글 결과 — 미포함 항목은 서버 기본값 `COMMON`으로 생성됨.
+`items`에는 **사용자가 실제 선택한 추천 물품만** 담는다. `items`에 포함된 추천 물품만 `packing_items`에 생성되고, 포함되지 않은 추천 물품은 미선택으로 보고 생성하지 않는다. `items: []`(빈 배열)도 허용 — 이 경우 AI 추천 물품은 0개이고 방장의 기본 물품(`user_default_items`)만 `PERSONAL`/`DEFAULT`로 복사된다. 각 항목의 `scope`는 `COMMON` 또는 `PERSONAL`이어야 하며, `item_name`이 비었거나 `scope`가 없거나/잘못됐거나 같은 `item_name`이 중복되면 임의 처리하지 않고 **400**으로 요청 전체를 실패시킨다.
 
 **Response**
 ```json
@@ -162,7 +162,7 @@ JWT는 stateless라 서버 측 블랙리스트는 없음 — 클라이언트가 
 
 | 상태코드 | 상황 |
 |:--:|:--|
-|400|`trip_name`/`expected_member_count`/`analysis_id` 누락, 본인이 요청하지 않은 `analysis_id`|
+|400|`trip_name`/`expected_member_count`/`analysis_id` 누락, 본인이 요청하지 않은 `analysis_id`, `items`의 `item_name` 누락·`scope` 누락/오값·`item_name` 중복|
 
 ---
 
@@ -679,6 +679,8 @@ S11 — **담당자 지정은 방장만** 가능. **일반 멤버는 본인이 �
 }
 ```
 
+`items` 규칙은 방 생성과 동일 — 포함된 추천 물품만 재생성되고, 미포함 추천은 생성되지 않는다. `scope`는 `COMMON`/`PERSONAL` 필수이며 오값·중복·`item_name` 누락 시 400. 기존 `AI` 항목은 소프트 삭제 후 `items` 기준으로만 다시 채워진다.
+
 **Response**
 ```json
 { "success": true, "message": "재생성 완료", "data": [] }
@@ -686,7 +688,7 @@ S11 — **담당자 지정은 방장만** 가능. **일반 멤버는 본인이 �
 
 | 상태코드 | 상황 |
 |:--:|:--|
-|400|`trip_id`/`analysis_id` 누락, 본인이 요청하지 않은 분석|
+|400|`trip_id`/`analysis_id` 누락, 본인이 요청하지 않은 분석, `items`의 `item_name` 누락·`scope` 누락/오값·`item_name` 중복|
 |403|방장이 아님|
 
 ---

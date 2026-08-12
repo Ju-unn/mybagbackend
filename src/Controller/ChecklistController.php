@@ -9,6 +9,7 @@ use App\Middleware\TripMemberMiddleware;
 use App\Middleware\TripOwnerMiddleware;
 use App\Service\ChecklistService;
 use App\Support\ApiResponse;
+use App\Support\Validator;
 use PDO;
 use RuntimeException;
 
@@ -164,14 +165,8 @@ class ChecklistController
         }
         TripOwnerMiddleware::handle($this->pdo, $tripId, $user['id']);
 
-        $scopeByItemName = [];
-        foreach ($body['items'] ?? [] as $item) {
-            if (isset($item['item_name'], $item['scope'])) {
-                $scopeByItemName[$item['item_name']] = $item['scope'];
-            }
-        }
-
         try {
+            $scopeByItemName = Validator::parseScopeItems($body['items'] ?? []);
             $this->checklistService->regenerateFromAnalysis($tripId, $user['id'], $analysisId, $scopeByItemName);
         } catch (RuntimeException $e) {
             ApiResponse::send(false, $e->getMessage(), [], 400);
