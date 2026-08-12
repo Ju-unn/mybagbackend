@@ -355,6 +355,8 @@ JWT는 stateless라 서버 측 블랙리스트는 없음 — 클라이언트가 
 ```
 `multipart/form-data`. `trip_id` 없이 독립적으로 동작 — 방 생성 전(S05)뿐 아니라 재분석(방 있는 상태에서 "다시 만들기") 시에도 그대로 재사용됨.
 
+> 이미지 수명주기: 업로드본은 `trip_id=NULL`로 저장되고, **방 생성 완료 시점에만** 실제 파일이 정리됨(재분석이 같은 사진을 재사용하는 구조라 분석 직후엔 안 지움). 방 생성까지 안 가고 이탈한 고아 업로드는 ① 그 유저가 다시 업로드할 때(`upload.php` 진입 시 본인 24h 경과분 청소) ② 매일 `cron/cleanup_orphans.php`(유저 구분 없이 24h 경과분 파일+DB행 일괄 청소)로 정리됨.
+
 **Body** <span>multipart/form-data</span>
 
 |KEY|VALUE|
