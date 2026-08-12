@@ -103,7 +103,7 @@ class ChecklistService
         }
     }
 
-    // update.php/delete.php 권한 — 개인 물품은 작성자 본인만, 공용 물품은 방장만 수정·삭제 가능
+    // update.php 권한 — 개인 물품은 작성자 본인만, 공용 물품은 방장만 수정 가능
     public function assertCanModify(array $item, int $userId, bool $isHost): void
     {
         if ($item['item_scope'] === 'PERSONAL') {
@@ -113,7 +113,26 @@ class ChecklistService
             return;
         }
         if (!$isHost) {
-            throw new RuntimeException('공용 물품은 방장만 수정·삭제할 수 있습니다.');
+            throw new RuntimeException('공용 물품은 방장만 수정할 수 있습니다.');
+        }
+    }
+
+    // delete.php 권한 — 개인 물품은 작성자 본인만. 공용 물품은 방장은 항상,
+    // 참여자는 본인이 담당(배정)받은 물품만 삭제 가능 — 내 목록에서 담당 해제 시 다중배정 clone row를
+    // 통째로 지우는 경로가 여기로 오기 때문(이름 수정 등은 여전히 방장 전용, assertCanModify).
+    public function assertCanDelete(array $item, int $userId, bool $isHost): void
+    {
+        if ($item['item_scope'] === 'PERSONAL') {
+            if ((int) $item['created_by_user_id'] !== $userId) {
+                throw new RuntimeException('본인 물품만 삭제할 수 있습니다.');
+            }
+            return;
+        }
+        if ($isHost) {
+            return;
+        }
+        if ((int) ($item['assignee_user_id'] ?? 0) !== $userId) {
+            throw new RuntimeException('공용 물품은 방장 또는 담당자만 삭제할 수 있습니다.');
         }
     }
 

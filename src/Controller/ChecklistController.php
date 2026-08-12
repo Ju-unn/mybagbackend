@@ -145,7 +145,7 @@ class ChecklistController
     {
         $user = AuthMiddleware::handle();
         [$item, $isHost] = $this->itemForMember($user['id']);
-        $this->authorize(fn () => $this->checklistService->assertCanModify($item, $user['id'], $isHost));
+        $this->authorize(fn () => $this->checklistService->assertCanDelete($item, $user['id'], $isHost));
 
         $this->checklistService->delete($item);
         ApiResponse::send(true, '삭제 완료');
