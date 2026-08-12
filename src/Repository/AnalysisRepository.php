@@ -81,4 +81,16 @@ class AnalysisRepository
              WHERE requested_by_user_id = ? AND trip_id IS NULL AND created_at < (NOW() - INTERVAL ? HOUR)'
         )->execute([$userId, $olderThanHours]);
     }
+
+    // 유저 구분 없이 모든 고아 분석 결과 삭제 — cron/cleanup_orphans.php 전용
+    public function deleteAllOrphans(int $olderThanHours): int
+    {
+        $stmt = $this->pdo->prepare(
+            'DELETE FROM ai_analyses
+             WHERE trip_id IS NULL AND created_at < (NOW() - INTERVAL ? HOUR)'
+        );
+        $stmt->execute([$olderThanHours]);
+
+        return $stmt->rowCount();
+    }
 }
