@@ -61,4 +61,10 @@ class NotificationLogRepository
     {
         $this->pdo->prepare('DELETE FROM notification_log WHERE trip_id = ?')->execute([$tripId]);
     }
+
+    // purge cron용(F-신규, 2026-08-24) — users FK가 RESTRICT라 물리 삭제 전 하드 삭제
+    public function deleteByUserId(int $userId): void
+    {
+        $this->pdo->prepare('DELETE FROM notification_log WHERE user_id = ?')->execute([$userId]);
+    }
 }

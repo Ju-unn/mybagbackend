@@ -37,6 +37,25 @@ class UserRepository
         )->execute([$userId]);
     }
 
+    // purge cron용(F-신규, 2026-08-24) — 탈퇴 후 유예기간이 지난 계정의 user_id 목록
+    public function findPurgeCandidates(int $graceDays): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT user_id FROM users
+             WHERE account_status = 'WITHDRAWN' AND withdrawn_at <= DATE_SUB(NOW(), INTERVAL ? DAY)"
+        );
+        $stmt->execute([$graceDays]);
+
+        return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    }
+
+    // purge cron 전용 물리 삭제 — 호출 전 FK RESTRICT 참조 테이블(trip_members/user_default_items/
+    // notification_settings/notification_log/fcm_tokens)을 먼저 비워둬야 함
+    public function purge(int $userId): void
+    {
+        $this->pdo->prepare('DELETE FROM users WHERE user_id = ?')->execute([$userId]);
+    }
+
     // 있으면 로그인 정보 갱신, 없으면 새로 생성. 반환값은 user_id
     public function upsertFromKakao(string $kakaoId, string $nickname, ?string $profileImageUrl): int
     {

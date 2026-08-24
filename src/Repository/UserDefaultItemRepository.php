@@ -101,4 +101,10 @@ class UserDefaultItemRepository
         $this->pdo->prepare('UPDATE user_default_items SET is_active = 0 WHERE default_item_id = ?')
             ->execute([$defaultItemId]);
     }
+
+    // purge cron용(F-신규, 2026-08-24) — users FK가 RESTRICT라 물리 삭제 전 하드 삭제
+    public function deleteByUserId(int $userId): void
+    {
+        $this->pdo->prepare('DELETE FROM user_default_items WHERE user_id = ?')->execute([$userId]);
+    }
 }

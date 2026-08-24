@@ -46,4 +46,10 @@ class NotificationSettingsRepository
         $this->pdo->prepare('UPDATE notification_settings SET ' . implode(', ', $set) . ' WHERE user_id = ?')
             ->execute($params);
     }
+
+    // purge cron용(F-신규, 2026-08-24) — users FK가 RESTRICT(PK=user_id)라 물리 삭제 전 하드 삭제
+    public function deleteByUserId(int $userId): void
+    {
+        $this->pdo->prepare('DELETE FROM notification_settings WHERE user_id = ?')->execute([$userId]);
+    }
 }

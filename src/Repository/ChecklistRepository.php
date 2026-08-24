@@ -242,6 +242,14 @@ class ChecklistRepository
         )->execute([$tripId, $userId]);
     }
 
+    // purge cron용 안전망(F-신규, 2026-08-24) — 탈퇴 처리 시 leaveTrip이 이미 트립별로 담당자를 해제하지만,
+    // packing_items.assignee_user_id는 users FK가 RESTRICT라 혹시 남은 참조가 있으면 물리 삭제가 실패함
+    public function clearAssigneeByUserId(int $userId): void
+    {
+        $this->pdo->prepare('UPDATE packing_items SET assignee_user_id = NULL WHERE assignee_user_id = ?')
+            ->execute([$userId]);
+    }
+
     // 나가기 시 본인의 개인 물품(직접 추가 USER + 프로필에서 시딩된 DEFAULT)을 정리 — 트립을 떠난 사람의
     // 개인 준비물이 화면에 계속 남지 않도록 한다.
     public function softDeletePersonalItemsByTripAndUser(int $tripId, int $userId): void

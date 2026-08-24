@@ -82,6 +82,12 @@ class TripMemberRepository
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    // purge cron용(F-신규, 2026-08-24) — users FK가 RESTRICT라 물리 삭제 전 LEFT 상태로 남은 참여 기록을 정리
+    public function deleteByUserId(int $userId): void
+    {
+        $this->pdo->prepare('DELETE FROM trip_members WHERE user_id = ?')->execute([$userId]);
+    }
+
     // 참여자 1명(방장뿐)인지 판단 — O3 TabBar Count=1/3, S12 단독 노출 조건(R-RPVDKA)
     public function countActive(int $tripId): int
     {

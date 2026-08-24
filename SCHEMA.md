@@ -169,7 +169,7 @@ ALTER TABLE users
 
 그 외 테이블은 변경 불필요 — 방장인 방은 탈퇴 즉시 기존 `TripService::deleteTrip()`으로 삭제되고, 일반 멤버로 참여 중인 방은 기존 `leaveTrip()` 로직을 그대로 재사용하기로 함.
 
-### 참고: 이후 purge cron 구현 시 정리 필요한 FK (RESTRICT라 하드 삭제 전에 비워야 함)
+### purge cron 구현 완료 (`cron/purge_withdrawn_users.php`) — 아래는 그 근거였던 FK 정리 목록
 
 `withdrawn_at`으로부터 30일 지난 `WITHDRAWN` 유저를 물리 삭제(`DELETE FROM users`)하려면, users를 참조하는 아래 테이블 중 CASCADE가 없는 것들을 먼저 정리해야 FK 에러가 안 남:
 
