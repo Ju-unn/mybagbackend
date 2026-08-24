@@ -26,7 +26,9 @@ class AuthService
     // 카카오 access_token 검증 → users upsert → 동의 기록 → 자체 JWT 발급
     // 카카오 호출 실패는 GuzzleException, 사용자 정보 누락은 RuntimeException으로 던짐 (컨트롤러에서 401 처리)
     // $privacyAgreed/$termsAgreed: 클라이언트 로그인 화면에서 필수 동의 체크박스로 받은 값
-    public function login(string $accessToken, bool $privacyAgreed = false, bool $termsAgreed = false): array
+    // $restoreConfirmed: 탈퇴 후 유예기간(30일) 내 재로그인 시 클라이언트가 복구 confirm 다이얼로그를 거쳤는지 여부.
+    // WITHDRAWN 계정인데 false로 들어오면 로그인을 진행하지 않고 requires_restore_confirmation만 반환한다(F-신규, 2026-08-24).
+    public function login(string $accessToken, bool $privacyAgreed = false, bool $termsAgreed = false, bool $restoreConfirmed = false): array
     {
         $kakaoUser = $this->kakaoClient->fetchUserInfo($accessToken);
 
@@ -36,6 +38,18 @@ class AuthService
 
         if (!$kakaoId) {
             throw new RuntimeException('카카오 사용자 정보를 확인할 수 없습니다.');
+        }
+
+        $existing = $this->userRepository->findByKakaoId((string) $kakaoId);
+
+        if ($existing && $existing['account_status'] === 'WITHDRAWN') {
+            if (!$restoreConfirmed) {
+                return [
+                    'requires_restore_confirmation' => true,
+                    'withdrawn_at' => $existing['withdrawn_at'],
+                ];
+            }
+            $this->userRepository->restoreFromWithdrawn((int) $existing['user_id']);
         }
 
         $userId = $this->userRepository->upsertFromKakao((string) $kakaoId, $nickname, $profileImageUrl);
@@ -54,5 +68,12 @@ class AuthService
             'token' => $token,
             'user' => ['id' => $userId, 'kakao_id' => $kakaoId, 'nickname' => $nickname, 'profile_image_url' => $profileImageUrl],
         ];
+    }
+
+    // 탈퇴(F-신규, 2026-08-24) — 트립/FCM 토큰 정리는 컨트롤러가 TripService/NotificationService로 먼저 처리한 뒤 호출됨.
+    // 여기선 users 소프트 삭제만 담당(계정 도메인 책임 분리)
+    public function withdraw(int $userId): void
+    {
+        $this->userRepository->markWithdrawn($userId);
     }
 }

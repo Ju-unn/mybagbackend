@@ -3,3 +3,8 @@
 /config/fcm-key.json
 /uploads/*
 !/uploads/.gitkeep
+
+/.agents/
+/.claude/
+/CLAUDE.md
+/skills-lock.json

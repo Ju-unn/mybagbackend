@@ -48,14 +48,19 @@
 ```
 인증 불필요. 카카오 `access_token`을 검증해 회원 upsert 후 자체 JWT를 발급합니다.
 
+탈퇴(WITHDRAWN, 유예기간 30일 이내) 계정으로 로그인을 시도하면 `restore_confirmed`가 없거나 `false`일 땐 토큰을 발급하지 않고 `requires_restore_confirmation: true`만 응답합니다. 클라이언트는 이때 "탈퇴한 계정입니다. 복구하시겠습니까?" 컨펌 다이얼로그를 띄우고, 사용자가 동의하면 같은 `access_token`으로 `restore_confirmed: true`를 담아 다시 호출해야 합니다.
+
 **Body**
 ```json
 {
-  "access_token": "카카오 access_token"
+  "access_token": "카카오 access_token",
+  "privacy_agreed": true,
+  "terms_agreed": true,
+  "restore_confirmed": false
 }
 ```
 
-**Response**
+**Response (일반 로그인)**
 ```json
 {
   "success": true,
@@ -68,6 +73,18 @@
       "nickname": "홍길동",
       "profile_image_url": "https://..."
     }
+  }
+}
+```
+
+**Response (탈퇴 유예기간 내 계정 — 복구 확인 필요)**
+```json
+{
+  "success": true,
+  "message": "탈퇴한 계정입니다. 복구하시겠습니까?",
+  "data": {
+    "requires_restore_confirmation": true,
+    "withdrawn_at": "2026-08-24 13:00:00"
   }
 }
 ```
@@ -123,6 +140,27 @@ JWT는 stateless라 서버 측 블랙리스트는 없음 — 클라이언트가 
 | 상태코드 | 상황 |
 |:--:|:--|
 |400|`token` 누락|
+
+---
+
+### <span style="color: #49cc90;">**POST**</span> 회원 탈퇴
+```
+/api/auth/withdraw.php
+```
+인증 필요(JWT). 방장인 트립은 즉시 완전 삭제(`TripService::deleteTrip`, 복구 불가)되고, 일반 멤버로 참여 중인 트립은 나가기 처리(`TripService::leaveTrip`)됩니다. FCM 토큰은 하드 삭제되고, 계정은 소프트 삭제(`account_status = WITHDRAWN`, `withdrawn_at` 기록)되어 30일간 보존됩니다. 유예기간 내 재로그인 시 [카카오 로그인](#post-카카오-로그인)의 복구 플로우로 되살릴 수 있습니다.
+
+**Response**
+```json
+{
+  "success": true,
+  "message": "탈퇴 처리되었습니다.",
+  "data": []
+}
+```
+
+| 상태코드 | 상황 |
+|:--:|:--|
+|401|인증 토큰 없음/유효하지 않음|
 
 ---
 

@@ -41,6 +41,13 @@ class NotificationRepository
             ->execute(['token' => $token]);
     }
 
+    // 탈퇴 시 하드 삭제(F-신규, 2026-08-24) — 더 이상 푸시를 보낼 이유가 없어 소프트 삭제 대상에서 제외
+    public function deleteByUserId(int $userId): void
+    {
+        $this->pdo->prepare('DELETE FROM fcm_tokens WHERE user_id = :user_id')
+            ->execute(['user_id' => $userId]);
+    }
+
     // 담당자 지정 알림 등 여러 사용자에게 한 번에 보낼 때 활성 토큰 조회
     public function findActiveTokensByUserIds(array $userIds): array
     {

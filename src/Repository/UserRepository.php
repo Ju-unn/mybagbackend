@@ -15,10 +15,26 @@ class UserRepository
 
     public function findByKakaoId(string $kakaoId): ?array
     {
-        $stmt = $this->pdo->prepare('SELECT user_id, kakao_user_id, nickname FROM users WHERE kakao_user_id = :kakao_user_id');
+        $stmt = $this->pdo->prepare('SELECT user_id, kakao_user_id, nickname, account_status, withdrawn_at FROM users WHERE kakao_user_id = :kakao_user_id');
         $stmt->execute(['kakao_user_id' => $kakaoId]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
         return $user ?: null;
+    }
+
+    // 탈퇴(F-신규, 2026-08-24) — 소프트 삭제. 물리 삭제는 withdrawn_at 기준 30일 후 별도 purge cron이 처리
+    public function markWithdrawn(int $userId): void
+    {
+        $this->pdo->prepare(
+            "UPDATE users SET account_status = 'WITHDRAWN', withdrawn_at = NOW() WHERE user_id = ?"
+        )->execute([$userId]);
+    }
+
+    // 탈퇴 후 유예기간 내 재로그인 시 복구 확인(restore_confirmed) 후 호출
+    public function restoreFromWithdrawn(int $userId): void
+    {
+        $this->pdo->prepare(
+            "UPDATE users SET account_status = 'ACTIVE', withdrawn_at = NULL WHERE user_id = ?"
+        )->execute([$userId]);
     }
 
     // 있으면 로그인 정보 갱신, 없으면 새로 생성. 반환값은 user_id

@@ -21,6 +21,12 @@ class NotificationService
         $this->notificationRepository->upsertFcmToken($userId, $token, $deviceId, $platform, $appVersion);
     }
 
+    // 탈퇴 시 본인 명의 FCM 토큰 전부 하드 삭제
+    public function removeAllTokensForUser(int $userId): void
+    {
+        $this->notificationRepository->deleteByUserId($userId);
+    }
+
     // 발송 실패 시(UNREGISTERED/NOT_FOUND) 토큰을 비활성화. 반환값은 발송 성공 여부
     public function notify(string $fcmToken, array $data): bool
     {

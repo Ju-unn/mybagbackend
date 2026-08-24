@@ -216,6 +216,13 @@ class TripService
         ]);
     }
 
+    // 탈퇴 처리용(F-신규, 2026-08-24) — AuthController::withdraw에서 호출. role별로 deleteTrip/leaveTrip에 그대로 위임하도록
+    // trip_id·role 목록만 반환 (실제 삭제/나가기 로직은 새로 만들지 않고 기존 메서드 재사용)
+    public function findJoinedTripsForWithdrawal(int $userId): array
+    {
+        return $this->memberRepository->findJoinedTripsByUserId($userId);
+    }
+
     // 팀원 나가기(F-신규, 2026-08-10 — 15번 섹션 G '제외 확정' 결정을 뒤집는 요청) — 본인 참여 상태만 LEFT로 변경,
     // 트립/다른 멤버 데이터는 그대로 둠. 담당하던 공용 물품은 해제해서 남은 멤버 화면에 나간 사람이 안 보이게 하고,
     // 본인 개인 물품(직접 추가+프로필 시딩)은 소프트 삭제해서 나간 사람 물품이 화면에 안 남게 함.

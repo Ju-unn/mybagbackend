@@ -70,6 +70,18 @@ class TripMemberRepository
         return $role !== false ? $role : null;
     }
 
+    // 탈퇴 처리용(F-신규, 2026-08-24) — 본인이 JOINED 상태로 남아있는 모든 트립을 role과 함께 반환.
+    // role=OWNER는 TripService::deleteTrip, role=MEMBER는 leaveTrip으로 각각 처리
+    public function findJoinedTripsByUserId(int $userId): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT trip_id, role FROM trip_members WHERE user_id = ? AND member_status = 'JOINED'"
+        );
+        $stmt->execute([$userId]);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     // 참여자 1명(방장뿐)인지 판단 — O3 TabBar Count=1/3, S12 단독 노출 조건(R-RPVDKA)
     public function countActive(int $tripId): int
     {

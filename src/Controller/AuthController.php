@@ -8,16 +8,20 @@ use App\Middleware\AuthMiddleware;
 use App\Middleware\RateLimitMiddleware;
 use App\Service\AuthService;
 use App\Service\NotificationService;
+use App\Service\TripService;
 use App\Support\ApiResponse;
 use GuzzleHttp\Exception\GuzzleException;
 use RuntimeException;
 
-// 인증 관련 API. html/api/auth/kakao_login.php, logout.php, fcm-token.php에서 이전
+// 인증 관련 API. html/api/auth/kakao_login.php, logout.php, fcm-token.php, withdraw.php에서 이전
 class AuthController
 {
+    // $tripService는 withdraw()에서만 사용 — kakao_login/logout/fcm-token 엔드포인트는 트립 도메인과 무관해
+    // DI 비용을 안 지우려고 nullable로 둠(withdraw.php만 실제로 주입)
     public function __construct(
         private AuthService $authService,
         private NotificationService $notificationService,
+        private ?TripService $tripService = null,
     ) {
     }
 
@@ -41,6 +45,7 @@ class AuthController
                 $accessToken,
                 (bool) ($body['privacy_agreed'] ?? false),
                 (bool) ($body['terms_agreed'] ?? false),
+                (bool) ($body['restore_confirmed'] ?? false),
             );
         } catch (GuzzleException $e) {
             ApiResponse::send(false, '카카오 토큰이 유효하지 않습니다.', [], 401);
@@ -48,7 +53,36 @@ class AuthController
             ApiResponse::send(false, $e->getMessage(), [], 401);
         }
 
+        // 탈퇴 유예기간(30일) 내 계정 — 로그인 미완료 상태로 복구 여부만 안내, 토큰 발급 안 함
+        if (!empty($result['requires_restore_confirmation'])) {
+            ApiResponse::send(true, '탈퇴한 계정입니다. 복구하시겠습니까?', $result);
+        }
+
         ApiResponse::send(true, '로그인 성공', $result);
+    }
+
+    // POST /api/auth/withdraw.php — 방장인 트립은 즉시 완전 삭제(복구 불가), 일반 참여 트립은 나가기 처리 후 계정 소프트 삭제
+    public function withdraw(): void
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            ApiResponse::send(false, 'POST만 허용됩니다.', [], 405);
+        }
+
+        $auth = AuthMiddleware::handle();
+        $userId = $auth['id'];
+
+        foreach ($this->tripService->findJoinedTripsForWithdrawal($userId) as $trip) {
+            if ($trip['role'] === 'OWNER') {
+                $this->tripService->deleteTrip((int) $trip['trip_id'], $userId);
+            } else {
+                $this->tripService->leaveTrip((int) $trip['trip_id'], $userId);
+            }
+        }
+
+        $this->notificationService->removeAllTokensForUser($userId);
+        $this->authService->withdraw($userId);
+
+        ApiResponse::send(true, '탈퇴 처리되었습니다.');
     }
 
     // POST /api/auth/logout.php
