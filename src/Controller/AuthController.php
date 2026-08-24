@@ -16,8 +16,8 @@ use RuntimeException;
 // 인증 관련 API. html/api/auth/kakao_login.php, logout.php, fcm-token.php, withdraw.php에서 이전
 class AuthController
 {
-    // $tripService는 withdraw()에서만 사용 — kakao_login/logout/fcm-token 엔드포인트는 트립 도메인과 무관해
-    // DI 비용을 안 지우려고 nullable로 둠(withdraw.php만 실제로 주입)
+    // $tripService는 performWithdrawal()(withdraw/withdrawWeb)에서만 사용 — kakao_login/logout/fcm-token
+    // 엔드포인트는 트립 도메인과 무관해 DI 비용을 안 지우려고 nullable로 둠(withdraw*.php만 실제로 주입)
     public function __construct(
         private AuthService $authService,
         private NotificationService $notificationService,
@@ -69,8 +69,44 @@ class AuthController
         }
 
         $auth = AuthMiddleware::handle();
-        $userId = $auth['id'];
+        $this->performWithdrawal($auth['id']);
 
+        ApiResponse::send(true, '탈퇴 처리되었습니다.');
+    }
+
+    // POST /api/auth/withdraw-web.php — Play 스토어 "앱 없이도 탈퇴 요청 가능" 요건용 웹 경로(html/withdraw.php).
+    // 앱 JWT 세션 대신 카카오 웹 로그인(access_token)으로 본인 확인 후 동일하게 처리
+    public function withdrawWeb(): void
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            ApiResponse::send(false, 'POST만 허용됩니다.', [], 405);
+        }
+
+        RateLimitMiddleware::handle(5, 60);
+
+        $body = json_decode(file_get_contents('php://input'), true);
+        $accessToken = $body['access_token'] ?? null;
+        if (!$accessToken) {
+            ApiResponse::send(false, 'access_token이 필요합니다.', [], 400);
+        }
+
+        try {
+            $userId = $this->authService->findActiveUserIdByKakaoToken($accessToken);
+        } catch (GuzzleException $e) {
+            ApiResponse::send(false, '카카오 토큰이 유효하지 않습니다.', [], 401);
+        } catch (RuntimeException $e) {
+            ApiResponse::send(false, $e->getMessage(), [], 404);
+        }
+
+        $this->performWithdrawal($userId);
+
+        ApiResponse::send(true, '탈퇴 처리되었습니다.');
+    }
+
+    // withdraw()/withdrawWeb() 공용 — 방장인 트립은 기존 deleteTrip 재사용(즉시 완전 삭제), 일반 참여 트립은 leaveTrip 재사용,
+    // FCM 토큰 하드 삭제 후 계정 소프트 삭제
+    private function performWithdrawal(int $userId): void
+    {
         foreach ($this->tripService->findJoinedTripsForWithdrawal($userId) as $trip) {
             if ($trip['role'] === 'OWNER') {
                 $this->tripService->deleteTrip((int) $trip['trip_id'], $userId);
@@ -81,8 +117,6 @@ class AuthController
 
         $this->notificationService->removeAllTokensForUser($userId);
         $this->authService->withdraw($userId);
-
-        ApiResponse::send(true, '탈퇴 처리되었습니다.');
     }
 
     // POST /api/auth/logout.php

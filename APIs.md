@@ -164,6 +164,37 @@ JWT는 stateless라 서버 측 블랙리스트는 없음 — 클라이언트가 
 
 ---
 
+### <span style="color: #49cc90;">**POST**</span> 회원 탈퇴 (웹 경로)
+```
+/api/auth/withdraw-web.php
+```
+Play 스토어 "앱 없이도 탈퇴 요청 가능" 요건 대응. 앱 JWT 세션 대신 카카오 웹 로그인(`access_token`)으로 본인 확인 후 [회원 탈퇴](#post-회원-탈퇴)와 동일하게 처리합니다. 웹 UI는 `/withdraw.php` (카카오 JS SDK 사용). IP당 1분에 5회로 rate limit.
+
+**Body**
+```json
+{
+  "access_token": "카카오 access_token (웹 SDK Kakao.Auth.login 결과)"
+}
+```
+
+**Response**
+```json
+{
+  "success": true,
+  "message": "탈퇴 처리되었습니다.",
+  "data": []
+}
+```
+
+| 상태코드 | 상황 |
+|:--:|:--|
+|400|`access_token` 누락|
+|401|카카오 토큰이 유효하지 않음|
+|404|가입된 계정을 찾을 수 없음 / 이미 탈퇴 처리된 계정|
+|429|요청 빈도 초과|
+
+---
+
 ## Trips (여행방)
 
 ### <span style="color: #49cc90;">**POST**</span> 방 생성

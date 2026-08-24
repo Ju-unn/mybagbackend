@@ -76,4 +76,25 @@ class AuthService
     {
         $this->userRepository->markWithdrawn($userId);
     }
+
+    // 웹 탈퇴 경로용(F-신규, 2026-08-24, Play 스토어 "앱 없이도 탈퇴 요청 가능" 요건) — 앱 로그인 세션(JWT) 없이
+    // 카카오 access_token만으로 본인 계정을 식별. 계정을 못 찾거나 이미 탈퇴 처리된 경우 RuntimeException
+    public function findActiveUserIdByKakaoToken(string $accessToken): int
+    {
+        $kakaoUser = $this->kakaoClient->fetchUserInfo($accessToken);
+        $kakaoId = $kakaoUser['id'] ?? null;
+        if (!$kakaoId) {
+            throw new RuntimeException('카카오 사용자 정보를 확인할 수 없습니다.');
+        }
+
+        $existing = $this->userRepository->findByKakaoId((string) $kakaoId);
+        if (!$existing) {
+            throw new RuntimeException('가입된 계정을 찾을 수 없습니다.');
+        }
+        if ($existing['account_status'] === 'WITHDRAWN') {
+            throw new RuntimeException('이미 탈퇴 처리된 계정입니다.');
+        }
+
+        return (int) $existing['user_id'];
+    }
 }
