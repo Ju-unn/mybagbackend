@@ -4,6 +4,8 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../config/environment.php';
 $env = load_env();
+
+const APP_ICON_URL = 'https://mybag.duckdns.org/assets/app_icon.png';
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -11,21 +13,38 @@ $env = load_env();
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>내가방 회원 탈퇴</title>
+<meta name="theme-color" content="#eef4fc">
+<link rel="icon" href="<?= htmlspecialchars(APP_ICON_URL, ENT_QUOTES) ?>">
 <style>
-  body { font-family: -apple-system, "Malgun Gothic", sans-serif; max-width: 520px; margin: 60px auto; padding: 0 20px; line-height: 1.7; color: #222; }
-  h1 { font-size: 20px; }
-  .warning { background: #fff4f4; border-left: 3px solid #e05656; padding: 14px 16px; font-size: 13.5px; margin: 20px 0; }
+  :root{color-scheme:light}
+  *{box-sizing:border-box}
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px;
+    background:radial-gradient(circle at 50% -10%, #eef4fc 0%, #dbe6f6 45%, #cddaf0 100%);
+    line-height: 1.7; color: #222;
+  }
+  .card{
+    background:#fff;border-radius:24px;padding:36px 28px 28px;max-width:440px;width:100%;
+    box-shadow:0 20px 40px -12px rgba(23,41,79,.25);
+  }
+  .icon{display:block;width:64px;height:64px;border-radius:16px;box-shadow:0 8px 24px -6px rgba(23,41,79,.35);margin:0 auto 18px}
+  h1 { font-size: 19px; margin: 0 0 8px; color: #16213e; font-weight: 800; text-align: center; }
+  p { text-align: center; }
+  .warning { background: #fff4f4; border-left: 3px solid #e05656; padding: 14px 16px; font-size: 13.5px; margin: 20px 0; text-align: left; }
   .warning li { margin: 4px 0; }
-  label { display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; margin: 16px 0; cursor: pointer; }
-  button { width: 100%; padding: 14px; font-size: 15px; border: none; border-radius: 8px; background: #FEE500; color: #191919; font-weight: 600; cursor: pointer; }
-  button:disabled { background: #eee; color: #999; cursor: not-allowed; }
-  #result { margin-top: 20px; font-size: 13.5px; padding: 12px 14px; border-radius: 6px; display: none; }
+  label { display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; margin: 16px 0; cursor: pointer; text-align: left; }
+  button { width: 100%; padding: 14px; font-size: 15px; border: none; border-radius: 14px; background: #FEE500; color: #191919; font-weight: 700; cursor: pointer; box-shadow:0 6px 16px -4px rgba(254,229,0,.6); }
+  button:disabled { background: #eee; color: #999; cursor: not-allowed; box-shadow:none; }
+  #result { margin-top: 20px; font-size: 13.5px; padding: 12px 14px; border-radius: 6px; display: none; text-align: center; }
   #result.success { display: block; background: #f0f9f0; color: #2a7a2a; }
   #result.error { display: block; background: #fdf0f0; color: #b23a3a; }
 </style>
 </head>
 <body>
+<div class="card">
 
+<img class="icon" src="<?= htmlspecialchars(APP_ICON_URL, ENT_QUOTES) ?>" alt="내가방">
 <h1>내가방(MyBag) 회원 탈퇴</h1>
 <p>앱을 삭제했거나 접속이 어려운 경우, 이 페이지에서 카카오 로그인으로 본인 확인 후 탈퇴를 요청할 수 있습니다.</p>
 
@@ -46,6 +65,8 @@ $env = load_env();
 <button id="withdrawBtn" disabled>카카오로 로그인하고 탈퇴하기</button>
 
 <div id="result"></div>
+
+</div>
 
 <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js"></script>
 <script>
