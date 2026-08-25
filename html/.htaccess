@@ -1,0 +1,9 @@
+RewriteEngine On
+
+# .html 확장자 제거
+RewriteCond %{REQUEST_FILENAME}.html -f
+RewriteRule ^([^.]+)$ $1.html [L]
+
+# .php 확장자 제거
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^([^.]+)$ $1.php [L]
